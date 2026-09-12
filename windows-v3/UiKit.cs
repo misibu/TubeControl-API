@@ -108,8 +108,22 @@ internal sealed class GlowButton : Button
         using var pen = new Pen(Enabled ? BorderColor : Color.FromArgb(80, 90, 86), BorderWidth);
         pevent.Graphics.FillPath(fill, path);
         if (BorderWidth > 0) pevent.Graphics.DrawPath(pen, path);
-        TextRenderer.DrawText(pevent.Graphics, Text, Font, rect, Enabled ? ForeColor : Color.Gray,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+
+        var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding;
+        var textRect = rect;
+        if (TextAlign is ContentAlignment.MiddleLeft or ContentAlignment.TopLeft or ContentAlignment.BottomLeft)
+        {
+            flags |= TextFormatFlags.Left;
+            textRect = Rectangle.Inflate(rect, -18, 0);
+        }
+        else if (TextAlign is ContentAlignment.MiddleRight or ContentAlignment.TopRight or ContentAlignment.BottomRight)
+        {
+            flags |= TextFormatFlags.Right;
+            textRect = Rectangle.Inflate(rect, -18, 0);
+        }
+        else flags |= TextFormatFlags.HorizontalCenter;
+
+        TextRenderer.DrawText(pevent.Graphics, Text, Font, textRect, Enabled ? ForeColor : Color.Gray, flags);
     }
 }
 
