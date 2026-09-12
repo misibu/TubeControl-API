@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="TubeControl"
+            android:textSize="30sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Регистрация возврата тубусов"
+            android:textSize="16sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/scanButton"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginTop="28dp"
+            android:text="СКАНИРОВАТЬ CODE 128"
+            android:textSize="18sp"
+            app:cornerRadius="14dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:text="Ручной ввод THU"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/thuInput"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="8dp"
+            android:hint="Например X0047937"
+            android:imeOptions="actionDone"
+            android:inputType="textCapCharacters"
+            android:maxLines="1"
+            android:paddingHorizontal="14dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/manualButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="10dp"
+            android:text="ЗАРЕГИСТРИРОВАТЬ THU"
+            app:cornerRadius="14dp" />
+
+        <TextView
+            android:id="@+id/statusBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:background="@color/status_neutral_bg"
+            android:gravity="center"
+            android:minHeight="120dp"
+            android:padding="18dp"
+            android:text="Готов к сканированию"
+            android:textColor="@color/status_neutral_text"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/tokenButton"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="18dp"
+            android:text="Изменить токен сканера" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:text="Сервер: tubecontrol-api-msk-misibun.amvera.io"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+</ScrollView>
