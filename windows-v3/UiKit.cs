@@ -1,0 +1,167 @@
+using System.Drawing.Drawing2D;
+
+namespace TubeControl.Windows;
+
+internal static class UiPalette
+{
+    public static readonly Color Emerald = Color.FromArgb(16, 185, 129);
+    public static readonly Color EmeraldBright = Color.FromArgb(24, 235, 164);
+    public static readonly Color Mint = Color.FromArgb(108, 255, 203);
+    public static readonly Color Dark = Color.FromArgb(3, 10, 8);
+    public static readonly Color DarkPanel = Color.FromArgb(7, 22, 18);
+    public static readonly Color DarkPanel2 = Color.FromArgb(10, 29, 24);
+    public static readonly Color DarkBorder = Color.FromArgb(31, 74, 61);
+    public static readonly Color Light = Color.FromArgb(240, 247, 244);
+    public static readonly Color LightPanel = Color.White;
+    public static readonly Color LightBorder = Color.FromArgb(191, 216, 205);
+    public static readonly Color Blue = Color.FromArgb(44, 153, 255);
+    public static readonly Color Yellow = Color.FromArgb(255, 198, 0);
+    public static readonly Color Red = Color.FromArgb(255, 82, 82);
+}
+
+internal static class UiDrawing
+{
+    public static GraphicsPath Rounded(Rectangle bounds, int radius)
+    {
+        var path = new GraphicsPath();
+        var r = Math.Max(2, Math.Min(radius, Math.Min(bounds.Width, bounds.Height) / 2));
+        var d = r * 2;
+        path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
+        path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
+        path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+        path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+
+    public static Color StatusColor(string? value)
+    {
+        var s = (value ?? string.Empty).Trim().ToLowerInvariant();
+        if (s.Contains("возвращ") || s == "returned") return UiPalette.EmeraldBright;
+        if (s.Contains("потер") || s.Contains("просроч") || s == "lost" || s == "overdue") return UiPalette.Red;
+        if (s.Contains("отправ") || s == "sent") return UiPalette.Blue;
+        return UiPalette.Yellow;
+    }
+}
+
+internal sealed class RoundedPanel : Panel
+{
+    public int Radius { get; set; } = 14;
+    public int BorderWidth { get; set; } = 1;
+    public Color BorderColor { get; set; } = UiPalette.DarkBorder;
+
+    public RoundedPanel()
+    {
+        DoubleBuffered = true;
+        BackColor = UiPalette.DarkPanel;
+        Padding = new Padding(1);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        using var path = UiDrawing.Rounded(rect, Radius);
+        using var fill = new SolidBrush(BackColor);
+        using var pen = new Pen(BorderColor, BorderWidth);
+        e.Graphics.FillPath(fill, path);
+        if (BorderWidth > 0) e.Graphics.DrawPath(pen, path);
+    }
+}
+
+internal sealed class GlowButton : Button
+{
+    public int Radius { get; set; } = 11;
+    public Color BorderColor { get; set; } = UiPalette.Emerald;
+    public Color FillColor { get; set; } = UiPalette.DarkPanel;
+    public Color HoverFillColor { get; set; } = UiPalette.DarkPanel2;
+    public Color PressedFillColor { get; set; } = Color.FromArgb(12, 70, 53);
+    public int BorderWidth { get; set; } = 1;
+    private bool _hover;
+    private bool _pressed;
+
+    public GlowButton()
+    {
+        FlatStyle = FlatStyle.Flat;
+        FlatAppearance.BorderSize = 0;
+        FlatAppearance.MouseDownBackColor = Color.Transparent;
+        FlatAppearance.MouseOverBackColor = Color.Transparent;
+        BackColor = Color.Transparent;
+        Cursor = Cursors.Hand;
+        DoubleBuffered = true;
+        UseVisualStyleBackColor = false;
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { _hover = false; _pressed = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseDown(MouseEventArgs mevent) { _pressed = true; Invalidate(); base.OnMouseDown(mevent); }
+    protected override void OnMouseUp(MouseEventArgs mevent) { _pressed = false; Invalidate(); base.OnMouseUp(mevent); }
+
+    protected override void OnPaint(PaintEventArgs pevent)
+    {
+        pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        var color = _pressed ? PressedFillColor : _hover ? HoverFillColor : FillColor;
+        using var path = UiDrawing.Rounded(rect, Radius);
+        using var fill = new SolidBrush(Enabled ? color : Color.FromArgb(35, 45, 42));
+        using var pen = new Pen(Enabled ? BorderColor : Color.FromArgb(80, 90, 86), BorderWidth);
+        pevent.Graphics.FillPath(fill, path);
+        if (BorderWidth > 0) pevent.Graphics.DrawPath(pen, path);
+        TextRenderer.DrawText(pevent.Graphics, Text, Font, rect, Enabled ? ForeColor : Color.Gray,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+    }
+}
+
+internal sealed class TubeIllustration : Control
+{
+    public bool DarkTheme { get; set; } = true;
+
+    public TubeIllustration()
+    {
+        DoubleBuffered = true;
+        MinimumSize = new Size(110, 80);
+        BackColor = Color.Transparent;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TranslateTransform(Width * .12f, Height * .12f);
+        g.RotateTransform(-24f);
+
+        var body = new RectangleF(16, 18, Math.Max(62, Width * .55f), Math.Max(34, Height * .30f));
+        using (var shadow = new SolidBrush(Color.FromArgb(45, UiPalette.EmeraldBright)))
+            g.FillEllipse(shadow, body.X - 8, body.Y - 8, body.Width + 34, body.Height + 34);
+        using (var bodyBrush = new LinearGradientBrush(body, Color.FromArgb(6, 15, 13), Color.FromArgb(22, 40, 33), 0f))
+        using (var borderPen = new Pen(UiPalette.Mint, 3f))
+        {
+            g.FillRectangle(bodyBrush, body);
+            g.DrawRectangle(borderPen, body.X, body.Y, body.Width, body.Height);
+            g.DrawEllipse(borderPen, body.Right - body.Height * .45f, body.Y, body.Height * .45f, body.Height);
+        }
+        var band = new RectangleF(body.X + body.Width * .43f, body.Y + 2, body.Width * .22f, body.Height - 4);
+        using (var bandBrush = new SolidBrush(Color.FromArgb(190, 215, 208))) g.FillRectangle(bandBrush, band);
+        using (var barPen = new Pen(Color.FromArgb(5, 85, 62), 2f))
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                var x = band.X + 4 + i * 4;
+                g.DrawLine(barPen, x, band.Y + 5, x, band.Bottom - 5);
+            }
+        }
+        g.ResetTransform();
+
+        var c = new Rectangle(Width - 54, Height - 54, 44, 44);
+        using var glow = new SolidBrush(Color.FromArgb(70, UiPalette.EmeraldBright));
+        g.FillEllipse(glow, c.X - 5, c.Y - 5, c.Width + 10, c.Height + 10);
+        using var fill = new SolidBrush(Color.FromArgb(8, 75, 56));
+        using var pen = new Pen(UiPalette.Mint, 2.5f);
+        g.FillEllipse(fill, c);
+        g.DrawEllipse(pen, c);
+        using var check = new Pen(Color.White, 4f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        g.DrawLines(check, new[] { new Point(c.X + 11, c.Y + 23), new Point(c.X + 18, c.Y + 30), new Point(c.X + 33, c.Y + 14) });
+    }
+}
