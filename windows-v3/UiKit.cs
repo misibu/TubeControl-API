@@ -61,7 +61,7 @@ internal sealed class RoundedPanel : Panel
     {
         base.OnPaint(e);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        var rect = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
         using var path = UiDrawing.Rounded(rect, Radius);
         using var fill = new SolidBrush(BackColor);
         using var pen = new Pen(BorderColor, BorderWidth);
@@ -85,9 +85,9 @@ internal sealed class GlowButton : Button
     {
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;
-        FlatAppearance.MouseDownBackColor = Color.Transparent;
-        FlatAppearance.MouseOverBackColor = Color.Transparent;
-        BackColor = Color.Transparent;
+        FlatAppearance.MouseDownBackColor = UiPalette.DarkPanel2;
+        FlatAppearance.MouseOverBackColor = UiPalette.DarkPanel2;
+        BackColor = UiPalette.DarkPanel;
         Cursor = Cursors.Hand;
         DoubleBuffered = true;
         UseVisualStyleBackColor = false;
@@ -101,11 +101,13 @@ internal sealed class GlowButton : Button
     protected override void OnPaint(PaintEventArgs pevent)
     {
         pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-        var color = _pressed ? PressedFillColor : _hover ? HoverFillColor : FillColor;
+        var rect = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
+        var requested = _pressed ? PressedFillColor : _hover ? HoverFillColor : FillColor;
+        var color = requested.A == 0 ? (Parent?.BackColor ?? BackColor) : requested;
         using var path = UiDrawing.Rounded(rect, Radius);
         using var fill = new SolidBrush(Enabled ? color : Color.FromArgb(35, 45, 42));
-        using var pen = new Pen(Enabled ? BorderColor : Color.FromArgb(80, 90, 86), BorderWidth);
+        var border = BorderColor.A == 0 ? color : BorderColor;
+        using var pen = new Pen(Enabled ? border : Color.FromArgb(80, 90, 86), BorderWidth);
         pevent.Graphics.FillPath(fill, path);
         if (BorderWidth > 0) pevent.Graphics.DrawPath(pen, path);
 
@@ -135,7 +137,13 @@ internal sealed class TubeIllustration : Control
     {
         DoubleBuffered = true;
         MinimumSize = new Size(110, 80);
-        BackColor = Color.Transparent;
+        BackColor = UiPalette.DarkPanel;
+    }
+
+    protected override void OnParentChanged(EventArgs e)
+    {
+        base.OnParentChanged(e);
+        if (Parent is not null) BackColor = Parent.BackColor;
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -156,18 +164,19 @@ internal sealed class TubeIllustration : Control
             g.DrawRectangle(borderPen, body.X, body.Y, body.Width, body.Height);
             g.DrawEllipse(borderPen, body.Right - body.Height * .45f, body.Y, body.Height * .45f, body.Height);
         }
+
         var band = new RectangleF(body.X + body.Width * .43f, body.Y + 2, body.Width * .22f, body.Height - 4);
         using (var bandBrush = new SolidBrush(Color.FromArgb(190, 215, 208))) g.FillRectangle(bandBrush, band);
         using (var barPen = new Pen(Color.FromArgb(5, 85, 62), 2f))
         {
-            for (int i = 0; i < 5; i++)
+            for (var i = 0; i < 5; i++)
             {
                 var x = band.X + 4 + i * 4;
                 g.DrawLine(barPen, x, band.Y + 5, x, band.Bottom - 5);
             }
         }
-        g.ResetTransform();
 
+        g.ResetTransform();
         var c = new Rectangle(Width - 54, Height - 54, 44, 44);
         using var glow = new SolidBrush(Color.FromArgb(70, UiPalette.EmeraldBright));
         g.FillEllipse(glow, c.X - 5, c.Y - 5, c.Width + 10, c.Height + 10);
