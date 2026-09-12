@@ -78,6 +78,8 @@ func main() {
 	mux.Handle("GET /api/v1/tubes/{thu}", app.requireDesktop(app.requireDB(http.HandlerFunc(app.getTube))))
 	mux.Handle("GET /api/v1/sync", app.requireDesktop(app.requireDB(http.HandlerFunc(app.syncTubes))))
 	registerDeviceRoutes(mux, app)
+	registerSiteRoutes(mux, app)
+	registerStatusRoutes(mux, app)
 
 	port := envDefault("PORT", "8080")
 	addr := "0.0.0.0:" + port
