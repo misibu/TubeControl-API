@@ -70,62 +70,171 @@ internal sealed class RoundedPanel : Panel
     }
 }
 
-internal sealed class GlowButton : Button
+// Fully owner-drawn control. It intentionally does NOT derive from Button:
+// native WinForms button painting can flash its rectangular background around
+// rounded corners on mouse down, especially in the light theme.
+internal sealed class GlowButton : Control
 {
-    public int Radius { get; set; } = 11;
+    private int _radius = 20;
+    private bool _hover;
+    private bool _pressed;
+
+    public int Radius
+    {
+        get => _radius;
+        set { _radius = Math.Max(2, value); UpdateRoundedRegion(); Invalidate(); }
+    }
+
     public Color BorderColor { get; set; } = UiPalette.Emerald;
     public Color FillColor { get; set; } = UiPalette.DarkPanel;
     public Color HoverFillColor { get; set; } = UiPalette.DarkPanel2;
     public Color PressedFillColor { get; set; } = Color.FromArgb(12, 70, 53);
     public int BorderWidth { get; set; } = 1;
-    private bool _hover;
-    private bool _pressed;
+    public ContentAlignment TextAlign { get; set; } = ContentAlignment.MiddleCenter;
 
     public GlowButton()
     {
-        FlatStyle = FlatStyle.Flat;
-        FlatAppearance.BorderSize = 0;
-        FlatAppearance.MouseDownBackColor = UiPalette.DarkPanel2;
-        FlatAppearance.MouseOverBackColor = UiPalette.DarkPanel2;
-        BackColor = UiPalette.DarkPanel;
+        SetStyle(ControlStyles.UserPaint |
+                 ControlStyles.AllPaintingInWmPaint |
+                 ControlStyles.OptimizedDoubleBuffer |
+                 ControlStyles.ResizeRedraw |
+                 ControlStyles.SupportsTransparentBackColor |
+                 ControlStyles.Selectable, true);
+        BackColor = Color.Transparent;
+        ForeColor = Color.White;
         Cursor = Cursors.Hand;
-        DoubleBuffered = true;
-        UseVisualStyleBackColor = false;
+        TabStop = true;
+        Font = new Font("Segoe UI", 9f, FontStyle.Regular);
     }
 
-    protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
-    protected override void OnMouseLeave(EventArgs e) { _hover = false; _pressed = false; Invalidate(); base.OnMouseLeave(e); }
-    protected override void OnMouseDown(MouseEventArgs mevent) { _pressed = true; Invalidate(); base.OnMouseDown(mevent); }
-    protected override void OnMouseUp(MouseEventArgs mevent) { _pressed = false; Invalidate(); base.OnMouseUp(mevent); }
-
-    protected override void OnPaint(PaintEventArgs pevent)
+    protected override void OnResize(EventArgs e)
     {
-        pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        var rect = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
-        var requested = _pressed ? PressedFillColor : _hover ? HoverFillColor : FillColor;
-        var color = requested.A == 0 ? (Parent?.BackColor ?? BackColor) : requested;
+        base.OnResize(e);
+        UpdateRoundedRegion();
+    }
+
+    protected override void OnParentChanged(EventArgs e)
+    {
+        base.OnParentChanged(e);
+        UpdateRoundedRegion();
+        Invalidate();
+    }
+
+    private void UpdateRoundedRegion()
+    {
+        if (Width <= 1 || Height <= 1) return;
+        var rect = new Rectangle(0, 0, Width, Height);
         using var path = UiDrawing.Rounded(rect, Radius);
-        using var fill = new SolidBrush(Enabled ? color : Color.FromArgb(35, 45, 42));
-        var border = BorderColor.A == 0 ? color : BorderColor;
-        using var pen = new Pen(Enabled ? border : Color.FromArgb(80, 90, 86), BorderWidth);
-        pevent.Graphics.FillPath(fill, path);
-        if (BorderWidth > 0) pevent.Graphics.DrawPath(pen, path);
+        var next = new Region(path);
+        var old = Region;
+        Region = next;
+        old?.Dispose();
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs pevent)
+    {
+        // The parent is visible outside Region, so never paint a rectangular
+        // background that can appear as white/light corners when pressed.
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        _hover = true;
+        Invalidate();
+        base.OnMouseEnter(e);
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        _hover = false;
+        _pressed = false;
+        Invalidate();
+        base.OnMouseLeave(e);
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        if (e.Button == MouseButtons.Left && Enabled)
+        {
+            _pressed = true;
+            Capture = true;
+            Focus();
+            Invalidate();
+        }
+        base.OnMouseDown(e);
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        var fire = _pressed && e.Button == MouseButtons.Left && ClientRectangle.Contains(e.Location) && Enabled;
+        _pressed = false;
+        Capture = false;
+        Invalidate();
+        base.OnMouseUp(e);
+        if (fire) OnClick(EventArgs.Empty);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+        {
+            _pressed = true;
+            Invalidate();
+            e.Handled = true;
+        }
+        base.OnKeyDown(e);
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        if (_pressed && Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+        {
+            _pressed = false;
+            Invalidate();
+            OnClick(EventArgs.Empty);
+            e.Handled = true;
+        }
+        base.OnKeyUp(e);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+        var rect = new Rectangle(1, 1, Math.Max(1, Width - 3), Math.Max(1, Height - 3));
+        var fillColor = !Enabled
+            ? Color.FromArgb(35, 45, 42)
+            : _pressed ? PressedFillColor : _hover ? HoverFillColor : FillColor;
+        var borderColor = Enabled ? BorderColor : Color.FromArgb(80, 90, 86);
+
+        using var path = UiDrawing.Rounded(rect, Radius);
+        using var fill = new SolidBrush(fillColor);
+        g.FillPath(fill, path);
+
+        if (BorderWidth > 0)
+        {
+            using var pen = new Pen(borderColor, BorderWidth);
+            g.DrawPath(pen, path);
+        }
 
         var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding;
-        var textRect = rect;
+        var textRect = Rectangle.Inflate(rect, -16, 0);
         if (TextAlign is ContentAlignment.MiddleLeft or ContentAlignment.TopLeft or ContentAlignment.BottomLeft)
-        {
             flags |= TextFormatFlags.Left;
-            textRect = Rectangle.Inflate(rect, -18, 0);
-        }
         else if (TextAlign is ContentAlignment.MiddleRight or ContentAlignment.TopRight or ContentAlignment.BottomRight)
-        {
             flags |= TextFormatFlags.Right;
-            textRect = Rectangle.Inflate(rect, -18, 0);
-        }
-        else flags |= TextFormatFlags.HorizontalCenter;
+        else
+            flags |= TextFormatFlags.HorizontalCenter;
 
-        TextRenderer.DrawText(pevent.Graphics, Text, Font, textRect, Enabled ? ForeColor : Color.Gray, flags);
+        TextRenderer.DrawText(g, Text, Font, textRect, Enabled ? ForeColor : Color.Gray, flags);
+
+        if (Focused && ShowFocusCues)
+        {
+            var focus = Rectangle.Inflate(rect, -4, -4);
+            ControlPaint.DrawFocusRectangle(g, focus, ForeColor, Color.Transparent);
+        }
     }
 }
 
@@ -180,10 +289,10 @@ internal sealed class TubeIllustration : Control
         var c = new Rectangle(Width - 54, Height - 54, 44, 44);
         using var glow = new SolidBrush(Color.FromArgb(70, UiPalette.EmeraldBright));
         g.FillEllipse(glow, c.X - 5, c.Y - 5, c.Width + 10, c.Height + 10);
-        using var fill = new SolidBrush(Color.FromArgb(8, 75, 56));
-        using var pen = new Pen(UiPalette.Mint, 2.5f);
-        g.FillEllipse(fill, c);
-        g.DrawEllipse(pen, c);
+        using var circleFill = new SolidBrush(Color.FromArgb(8, 75, 56));
+        using var circlePen = new Pen(UiPalette.Mint, 2.5f);
+        g.FillEllipse(circleFill, c);
+        g.DrawEllipse(circlePen, c);
         using var check = new Pen(Color.White, 4f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
         g.DrawLines(check, new[] { new Point(c.X + 11, c.Y + 23), new Point(c.X + 18, c.Y + 30), new Point(c.X + 33, c.Y + 14) });
     }
