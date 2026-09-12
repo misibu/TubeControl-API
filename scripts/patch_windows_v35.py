@@ -12,6 +12,7 @@ def replace_between(text: str, start_marker: str, end_marker: str, replacement: 
 # In the minimal v3.4 layout the old right-side status editor is no longer built.
 # ShowSelected must therefore never touch its hidden ComboBox (_status), otherwise
 # setting SelectedIndex=0 on an empty item list throws InvalidArgumentException.
+# Keep the v3.4 modal EditSelectedStatus method that sits immediately after it.
 show_selected = r'''    private void ShowSelected()
     {
         foreach (DataGridViewRow row in _grid.Rows)
@@ -20,10 +21,10 @@ show_selected = r'''    private void ShowSelected()
                 row.Cells[0].Value = _grid.SelectedRows.Count > 0 && row == _grid.SelectedRows[0];
         }
     }'''
-s = replace_between(s, "    private void ShowSelected()\n", "    private async Task SaveStatus()\n", show_selected)
+s = replace_between(s, "    private void ShowSelected()\n", "    private async Task EditSelectedStatus()\n", show_selected)
 
-# Make the minimal toolbar a little calmer and more consistent with Android:
-# same rounded radius and no symbol-glyph dependency in button labels.
+# Make the minimal toolbar calmer and consistent with Android: same pill radius
+# and enough width for Russian labels at common Windows scaling levels.
 s = s.replace('var import = Action("Импорт Excel", async () => await ImportExcel(), 138);',
               'var import = Action("Импорт Excel", async () => await ImportExcel(), 142);')
 s = s.replace('var add = Action("Добавить THU", async () => await AddThu(), 142);',
