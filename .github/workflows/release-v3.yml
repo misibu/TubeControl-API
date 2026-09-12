@@ -12,6 +12,7 @@ on:
       - 'scripts/patch_windows_v35.py'
       - 'scripts/patch_windows_v36.py'
       - 'scripts/patch_windows_v37.py'
+      - 'scripts/patch_windows_v38.py'
       - '.github/workflows/release-v3.yml'
   workflow_dispatch:
 
@@ -41,6 +42,8 @@ jobs:
         run: python scripts/patch_windows_v36.py
       - name: Apply Windows v3.7 dark-theme and selection polish
         run: python scripts/patch_windows_v37.py
+      - name: Apply Windows v3.8 activation recovery
+        run: python scripts/patch_windows_v38.py
       - name: Generate TubeControl icon
         shell: powershell
         working-directory: windows-v3
