@@ -33,7 +33,8 @@ public sealed class ConfigStore
                 DeviceToken = token,
                 DeviceId = dto.DeviceId ?? "",
                 DeviceName = string.IsNullOrWhiteSpace(dto.DeviceName) ? Environment.MachineName : dto.DeviceName,
-                Theme = dto.Theme == "light" ? "light" : "dark"
+                Theme = dto.Theme == "light" ? "light" : "dark",
+                OverdueDays = dto.OverdueDays is >= 1 and <= 365 ? dto.OverdueDays : 14
             };
         }
         catch { return new AppConfig(); }
@@ -53,7 +54,8 @@ public sealed class ConfigStore
             ProtectedToken = protectedToken,
             DeviceId = config.DeviceId,
             DeviceName = config.DeviceName,
-            Theme = config.Theme
+            Theme = config.Theme,
+            OverdueDays = Math.Clamp(config.OverdueDays, 1, 365)
         };
         File.WriteAllText(_path, JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true }));
     }
@@ -65,5 +67,6 @@ public sealed class ConfigStore
         public string? DeviceId { get; set; }
         public string? DeviceName { get; set; }
         public string? Theme { get; set; }
+        public int OverdueDays { get; set; } = 14;
     }
 }
