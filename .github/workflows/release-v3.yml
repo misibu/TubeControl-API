@@ -8,6 +8,7 @@ on:
       - 'android-v3/**'
       - 'scripts/patch_windows_v32.py'
       - 'scripts/patch_windows_v33.py'
+      - 'scripts/patch_windows_v34.py'
       - '.github/workflows/release-v3.yml'
   workflow_dispatch:
 
@@ -27,8 +28,10 @@ jobs:
           python-version: '3.12'
       - name: Apply UTF-8 safe Windows v3.2 base patch
         run: python scripts/patch_windows_v32.py
-      - name: Apply Windows v3.3 resilience and layout patch
+      - name: Apply Windows v3.3 resilience patch
         run: python scripts/patch_windows_v33.py
+      - name: Apply Windows v3.4 minimal redesign
+        run: python scripts/patch_windows_v34.py
       - name: Generate TubeControl icon
         shell: powershell
         working-directory: windows-v3
