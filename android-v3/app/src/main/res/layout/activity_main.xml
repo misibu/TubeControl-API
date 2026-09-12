@@ -97,7 +97,7 @@
             android:layout_marginTop="8dp"
             android:background="@drawable/tc_input"
             android:hint="Например X0047937"
-            android:hintTextColor="@color/tc_muted"
+            android:textColorHint="@color/tc_muted"
             android:imeOptions="actionDone"
             android:inputType="textCapCharacters"
             android:maxLines="1"
