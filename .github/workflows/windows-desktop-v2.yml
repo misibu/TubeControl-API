@@ -1,0 +1,38 @@
+name: Build Windows Desktop v2
+
+on:
+  push:
+    branches:
+      - windows-desktop
+    paths:
+      - 'windows-desktop/**'
+      - '.github/workflows/windows-desktop-v2.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Prepare modules
+        working-directory: windows-desktop
+        run: go mod tidy
+      - name: Build Windows x64
+        working-directory: windows-desktop
+        env:
+          CGO_ENABLED: '0'
+          GOOS: windows
+          GOARCH: amd64
+        run: go build -trimpath -ldflags="-s -w -H=windowsgui" -o ../TubeControl-Windows-v2.exe .
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: TubeControl-Windows-v2
+          path: TubeControl-Windows-v2.exe
+          if-no-files-found: error
+          retention-days: 30
