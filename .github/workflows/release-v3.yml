@@ -9,6 +9,7 @@ on:
       - 'scripts/patch_windows_v32.py'
       - 'scripts/patch_windows_v33.py'
       - 'scripts/patch_windows_v34.py'
+      - 'scripts/patch_windows_v35.py'
       - '.github/workflows/release-v3.yml'
   workflow_dispatch:
 
@@ -32,6 +33,8 @@ jobs:
         run: python scripts/patch_windows_v33.py
       - name: Apply Windows v3.4 minimal redesign
         run: python scripts/patch_windows_v34.py
+      - name: Apply Windows v3.5 button and selection fixes
+        run: python scripts/patch_windows_v35.py
       - name: Generate TubeControl icon
         shell: powershell
         working-directory: windows-v3
