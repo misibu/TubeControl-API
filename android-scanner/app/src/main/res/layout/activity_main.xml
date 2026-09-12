@@ -76,14 +76,15 @@
             android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/tokenButton"
+            android:id="@+id/settingsButton"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="18dp"
-            android:text="Изменить токен сканера" />
+            android:text="Настройки устройства" />
 
         <TextView
+            android:id="@+id/serverText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
