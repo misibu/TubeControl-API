@@ -1,12 +1,10 @@
 package ru.tubecontrol.scanner;
 
 import android.content.SharedPreferences;
-import android.graphics.Bitmap;
+import android.os.Build;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -17,7 +15,6 @@ import androidx.security.crypto.MasterKeys;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.zxing.BarcodeFormat;
-import com.journeyapps.barcodescanner.BarcodeEncoder;
 import com.journeyapps.barcodescanner.ScanContract;
 import com.journeyapps.barcodescanner.ScanIntentResult;
 import com.journeyapps.barcodescanner.ScanOptions;
@@ -38,18 +35,19 @@ import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
     private static final String DEFAULT_BASE_URL = "https://tubecontrol-api-msk-misibun.amvera.io";
-    private static final String PREF_TOKEN = "scanner_token";
-    private static final String PREF_SERVER = "server_url";
-    private static final String SETUP_TYPE = "tubecontrol-setup-v1";
-    private static final String SETUP_PREFIX = "TCSETUP1|";
+    private static final String PREF_TOKEN = "device_token_v2";
+    private static final String PREF_SERVER = "server_url_v2";
+    private static final String PREF_DEVICE_ID = "device_id_v2";
+    private static final String PREF_DEVICE_NAME = "device_name_v2";
+    private static final String SETUP_TYPE = "tubecontrol-enroll-v2";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final OkHttpClient http = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(12, TimeUnit.SECONDS)
-            .writeTimeout(12, TimeUnit.SECONDS)
-            .callTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build();
 
     private MaterialButton scanButton;
@@ -100,62 +98,51 @@ public class MainActivity extends AppCompatActivity {
         try {
             String masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
             return EncryptedSharedPreferences.create(
-                    "tubecontrol_secure",
+                    "tubecontrol_secure_v2",
                     masterKeyAlias,
                     this,
                     EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                     EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             );
         } catch (Exception ignored) {
-            return getSharedPreferences("tubecontrol_private", MODE_PRIVATE);
+            return getSharedPreferences("tubecontrol_private_v2", MODE_PRIVATE);
         }
     }
 
-    private String getToken() {
-        if (prefs == null) return "";
-        String token = prefs.getString(PREF_TOKEN, "");
-        return token == null ? "" : token.trim();
+    private String pref(String key, String fallback) {
+        if (prefs == null) return fallback;
+        String value = prefs.getString(key, fallback);
+        return value == null ? fallback : value.trim();
     }
 
+    private String getToken() { return pref(PREF_TOKEN, ""); }
     private String getBaseUrl() {
-        if (prefs == null) return DEFAULT_BASE_URL;
-        String server = prefs.getString(PREF_SERVER, DEFAULT_BASE_URL);
-        if (server == null || server.trim().isEmpty()) return DEFAULT_BASE_URL;
-        return normalizeServer(server);
-    }
-
-    private boolean isConfigured() {
-        return !getToken().isEmpty();
-    }
-
-    private String normalizeServer(String value) {
-        String server = value == null ? "" : value.trim();
-        while (server.endsWith("/")) {
-            server = server.substring(0, server.length() - 1);
-        }
+        String server = pref(PREF_SERVER, DEFAULT_BASE_URL);
+        if (server.isEmpty()) server = DEFAULT_BASE_URL;
+        while (server.endsWith("/")) server = server.substring(0, server.length() - 1);
         return server;
     }
+    private boolean isConfigured() { return !getToken().isEmpty(); }
 
     private void refreshUi() {
         String server = getBaseUrl().replace("https://", "").replace("http://", "");
-        serverText.setText("Сервер: " + server);
-        if (isConfigured()) {
-            scanButton.setEnabled(true);
-            manualButton.setEnabled(true);
+        String name = pref(PREF_DEVICE_NAME, "");
+        serverText.setText(name.isEmpty() ? "Сервер: " + server : "Устройство: " + name + "\nСервер: " + server);
+        boolean ready = isConfigured();
+        scanButton.setEnabled(ready);
+        manualButton.setEnabled(ready);
+        if (ready) {
             showNeutral("Готов к сканированию");
         } else {
-            scanButton.setEnabled(false);
-            manualButton.setEnabled(false);
-            showWarning("Требуется настройка устройства\nОтсканируйте QR настройки");
+            showWarning("Устройство не подключено\nОтсканируйте QR с Windows");
         }
     }
 
     private void showFirstSetupDialog() {
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Настройка устройства")
-                .setMessage("Для работы сканера отсканируйте QR-код настройки TubeControl. Вводить длинный токен вручную не нужно.")
+                .setTitle("Подключение TubeControl")
+                .setMessage("На компьютере нажмите «Подключить телефон», затем отсканируйте показанный QR. Токен вводить не нужно.")
                 .setPositiveButton("Сканировать QR", (d, which) -> startSetupScanner())
-                .setNegativeButton("Ввести вручную", (d, which) -> showManualTokenDialog())
                 .create();
         dialog.setCancelable(false);
         dialog.setCanceledOnTouchOutside(false);
@@ -167,21 +154,12 @@ public class MainActivity extends AppCompatActivity {
             showFirstSetupDialog();
             return;
         }
-
-        String[] items = {
-                "Сканировать новый QR настройки",
-                "Показать QR для другого устройства",
-                "Ввести токен вручную",
-                "Сбросить настройку"
-        };
-
+        String[] items = {"Переподключить по QR", "Сбросить подключение"};
         new AlertDialog.Builder(this)
                 .setTitle("Настройки устройства")
                 .setItems(items, (dialog, which) -> {
                     if (which == 0) startSetupScanner();
-                    if (which == 1) showConfigQr();
-                    if (which == 2) showManualTokenDialog();
-                    if (which == 3) confirmReset();
+                    if (which == 1) confirmReset();
                 })
                 .setNegativeButton("Закрыть", null)
                 .show();
@@ -190,7 +168,7 @@ public class MainActivity extends AppCompatActivity {
     private void startSetupScanner() {
         ScanOptions options = new ScanOptions();
         options.setDesiredBarcodeFormats(Collections.singletonList(BarcodeFormat.QR_CODE.toString()));
-        options.setPrompt("Наведите камеру на QR настройки TubeControl");
+        options.setPrompt("Наведите камеру на QR подключения TubeControl");
         options.setBeepEnabled(true);
         options.setOrientationLocked(true);
         options.setCaptureActivity(PortraitCaptureActivity.class);
@@ -199,124 +177,93 @@ public class MainActivity extends AppCompatActivity {
 
     private void onSetupScanResult(ScanIntentResult result) {
         if (result == null || result.getContents() == null) {
-            if (!isConfigured()) showWarning("Настройка не выполнена\nОтсканируйте QR настройки");
+            if (!isConfigured()) {
+                showWarning("Подключение не выполнено");
+                showFirstSetupDialog();
+            }
             return;
         }
-
         try {
-            SetupConfig config = parseSetupPayload(result.getContents());
-            saveConfiguration(config.server, config.token);
-            refreshUi();
-            showSuccess("Устройство настроено\nМожно сканировать THU");
-        } catch (Exception e) {
-            showError("Неверный QR настройки\nИспользуйте QR TubeControl");
-            if (!isConfigured()) {
-                scanButton.setEnabled(false);
-                manualButton.setEnabled(false);
-            }
-        }
-    }
-
-    private SetupConfig parseSetupPayload(String raw) throws Exception {
-        String value = raw == null ? "" : raw.trim();
-        String server;
-        String token;
-
-        if (value.startsWith("{")) {
-            JSONObject json = new JSONObject(value);
+            JSONObject json = new JSONObject(result.getContents().trim());
             if (!SETUP_TYPE.equals(json.optString("type", ""))) {
                 throw new IllegalArgumentException("wrong type");
             }
-            server = json.optString("server", "");
-            token = json.optString("token", "");
-        } else if (value.startsWith(SETUP_PREFIX)) {
-            String[] parts = value.split("\\|", 3);
-            if (parts.length != 3) throw new IllegalArgumentException("wrong format");
-            server = parts[1];
-            token = parts[2];
-        } else {
-            throw new IllegalArgumentException("unknown setup QR");
-        }
-
-        server = normalizeServer(server);
-        token = token.trim();
-        if (!server.startsWith("https://")) throw new IllegalArgumentException("https required");
-        if (token.length() < 8) throw new IllegalArgumentException("token too short");
-        return new SetupConfig(server, token);
-    }
-
-    private void saveConfiguration(String server, String token) {
-        prefs.edit()
-                .putString(PREF_SERVER, normalizeServer(server))
-                .putString(PREF_TOKEN, token.trim())
-                .apply();
-    }
-
-    private void showManualTokenDialog() {
-        final EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        input.setHint("SCANNER_TOKEN");
-        input.setPadding(32, 16, 32, 16);
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Ручная настройка")
-                .setMessage("Используйте этот способ только для первого устройства. После настройки оно сможет показать QR для остальных телефонов.")
-                .setView(input)
-                .setPositiveButton("Сохранить", null)
-                .setNegativeButton("Отмена", null)
-                .create();
-
-        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            String value = input.getText().toString().trim();
-            if (value.length() < 8) {
-                input.setError("Проверьте токен");
-                return;
+            String server = json.optString("server", "").trim();
+            String code = json.optString("code", "").trim().toUpperCase(Locale.ROOT);
+            while (server.endsWith("/")) server = server.substring(0, server.length() - 1);
+            if (!server.startsWith("https://") || code.length() < 6) {
+                throw new IllegalArgumentException("bad payload");
             }
-            saveConfiguration(getBaseUrl(), value);
-            dialog.dismiss();
-            refreshUi();
-            showSuccess("Устройство настроено\nМожно сканировать THU");
-        }));
-        dialog.show();
+            enrollDevice(server, code);
+        } catch (Exception e) {
+            showError("Неверный QR подключения\nИспользуйте QR из TubeControl Windows");
+            if (!isConfigured()) showFirstSetupDialog();
+        }
     }
 
-    private void showConfigQr() {
-        if (!isConfigured()) {
-            showFirstSetupDialog();
-            return;
-        }
+    private void enrollDevice(String server, String code) {
+        setBusy(true);
+        showNeutral("Подключаем устройство...");
+        executor.execute(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("code", code);
+                payload.put("device_name", buildDeviceName());
+                Request request = new Request.Builder()
+                        .url(server + "/api/v2/enroll")
+                        .header("Accept", "application/json")
+                        .post(RequestBody.create(payload.toString(), JSON))
+                        .build();
+                try (Response response = http.newCall(request).execute()) {
+                    String body = response.body() == null ? "" : response.body().string();
+                    if (response.code() != 200) {
+                        runOnUiThread(() -> {
+                            setBusy(false);
+                            showError("QR недействителен или истёк\nСоздайте новый QR в Windows");
+                            if (!isConfigured()) showFirstSetupDialog();
+                        });
+                        return;
+                    }
+                    JSONObject json = new JSONObject(body);
+                    String token = json.optString("device_token", "").trim();
+                    JSONObject device = json.optJSONObject("device");
+                    String id = device == null ? "" : device.optString("id", "");
+                    String name = device == null ? buildDeviceName() : device.optString("name", buildDeviceName());
+                    if (token.isEmpty()) throw new IllegalStateException("empty token");
+                    prefs.edit()
+                            .putString(PREF_SERVER, server)
+                            .putString(PREF_TOKEN, token)
+                            .putString(PREF_DEVICE_ID, id)
+                            .putString(PREF_DEVICE_NAME, name)
+                            .apply();
+                    runOnUiThread(() -> {
+                        setBusy(false);
+                        refreshUi();
+                        showSuccess("Устройство подключено\nМожно сканировать THU");
+                    });
+                }
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    showError("Не удалось подключиться к серверу\n" + safeMessage(e));
+                    if (!isConfigured()) showFirstSetupDialog();
+                });
+            }
+        });
+    }
 
-        try {
-            JSONObject config = new JSONObject();
-            config.put("type", SETUP_TYPE);
-            config.put("server", getBaseUrl());
-            config.put("token", getToken());
-
-            BarcodeEncoder encoder = new BarcodeEncoder();
-            Bitmap bitmap = encoder.encodeBitmap(config.toString(), BarcodeFormat.QR_CODE, 760, 760);
-            ImageView image = new ImageView(this);
-            image.setImageBitmap(bitmap);
-            image.setAdjustViewBounds(true);
-            image.setPadding(20, 20, 20, 20);
-
-            new AlertDialog.Builder(this)
-                    .setTitle("QR настройки TubeControl")
-                    .setMessage("Отсканируйте этот QR на другом телефоне. QR содержит ключ доступа — показывайте его только доверенным сотрудникам.")
-                    .setView(image)
-                    .setPositiveButton("Закрыть", null)
-                    .show();
-        } catch (Exception e) {
-            showError("Не удалось создать QR настройки");
-        }
+    private String buildDeviceName() {
+        String manufacturer = Build.MANUFACTURER == null ? "Android" : Build.MANUFACTURER.trim();
+        String model = Build.MODEL == null ? "Scanner" : Build.MODEL.trim();
+        return (manufacturer + " " + model).trim();
     }
 
     private void confirmReset() {
         new AlertDialog.Builder(this)
-                .setTitle("Сбросить настройку?")
-                .setMessage("После сброса потребуется снова отсканировать QR настройки.")
+                .setTitle("Сбросить подключение?")
+                .setMessage("После сброса потребуется новый QR с компьютера.")
                 .setPositiveButton("Сбросить", (dialog, which) -> {
-                    prefs.edit().remove(PREF_TOKEN).remove(PREF_SERVER).apply();
+                    prefs.edit().clear().apply();
                     refreshUi();
                     showFirstSetupDialog();
                 })
@@ -329,7 +276,6 @@ public class MainActivity extends AppCompatActivity {
             showFirstSetupDialog();
             return;
         }
-
         ScanOptions options = new ScanOptions();
         options.setDesiredBarcodeFormats(Collections.singletonList(BarcodeFormat.CODE_128.toString()));
         options.setPrompt("Наведите камеру на штрихкод THU");
@@ -375,22 +321,18 @@ public class MainActivity extends AppCompatActivity {
             showFirstSetupDialog();
             return;
         }
-
         setBusy(true);
         showNeutral("THU: " + thu + "\nПроверяем...");
-
         executor.execute(() -> {
             try {
                 JSONObject payload = new JSONObject();
                 payload.put("thu", thu);
-
                 Request request = new Request.Builder()
                         .url(getBaseUrl() + "/api/v1/returns")
-                        .header("X-API-Key", token)
+                        .header("Authorization", "Bearer " + token)
                         .header("Accept", "application/json")
                         .post(RequestBody.create(payload.toString(), JSON))
                         .build();
-
                 try (Response response = http.newCall(request).execute()) {
                     int code = response.code();
                     String body = response.body() == null ? "" : response.body().string();
@@ -400,9 +342,7 @@ public class MainActivity extends AppCompatActivity {
                         JSONObject json = new JSONObject(body);
                         status = json.optString("status", "");
                         returnedAt = json.optString("returned_at", "");
-                    } catch (Exception ignored) {
-                    }
-
+                    } catch (Exception ignored) {}
                     final String finalStatus = status;
                     final String finalReturnedAt = returnedAt;
                     runOnUiThread(() -> handleApiResponse(thu, code, finalStatus, finalReturnedAt));
@@ -419,39 +359,30 @@ public class MainActivity extends AppCompatActivity {
     private void handleApiResponse(String thu, int code, String status, String returnedAt) {
         setBusy(false);
         thuInput.setText("");
-
         if (code == 200 && "returned".equals(status)) {
             showSuccess("THU: " + thu + "\nВозврат зарегистрирован");
             return;
         }
-
         if (code == 200 && "already_returned".equals(status)) {
             String suffix = returnedAt.isEmpty() ? "" : "\n" + returnedAt;
             showWarning("THU: " + thu + "\nУже возвращён" + suffix);
             return;
         }
-
         if (code == 404 || "not_found".equals(status)) {
             showError("THU: " + thu + "\nTHU не найден");
             return;
         }
-
         if (code == 401 || code == 403) {
-            showError("Ошибка авторизации\nОткройте «Настройки устройства» и отсканируйте новый QR");
+            showError("Устройство отключено или авторизация истекла\nПодключите его заново через QR");
             return;
         }
-
         showError("THU: " + thu + "\nОшибка сервера (HTTP " + code + ")");
     }
 
     private String safeMessage(Exception e) {
         String message = e.getMessage();
-        if (message == null || message.trim().isEmpty()) {
-            return e.getClass().getSimpleName();
-        }
-        if (message.length() > 100) {
-            return message.substring(0, 100);
-        }
+        if (message == null || message.trim().isEmpty()) return e.getClass().getSimpleName();
+        if (message.length() > 100) return message.substring(0, 100);
         return message;
     }
 
@@ -459,24 +390,13 @@ public class MainActivity extends AppCompatActivity {
         scanButton.setEnabled(!busy && isConfigured());
         manualButton.setEnabled(!busy && isConfigured());
         settingsButton.setEnabled(!busy);
-        thuInput.setEnabled(!busy);
+        thuInput.setEnabled(!busy && isConfigured());
     }
 
-    private void showNeutral(String text) {
-        setStatus(text, R.color.status_neutral_bg, R.color.status_neutral_text);
-    }
-
-    private void showSuccess(String text) {
-        setStatus(text, R.color.status_green_bg, R.color.status_green_text);
-    }
-
-    private void showWarning(String text) {
-        setStatus(text, R.color.status_yellow_bg, R.color.status_yellow_text);
-    }
-
-    private void showError(String text) {
-        setStatus(text, R.color.status_red_bg, R.color.status_red_text);
-    }
+    private void showNeutral(String text) { setStatus(text, R.color.status_neutral_bg, R.color.status_neutral_text); }
+    private void showSuccess(String text) { setStatus(text, R.color.status_green_bg, R.color.status_green_text); }
+    private void showWarning(String text) { setStatus(text, R.color.status_yellow_bg, R.color.status_yellow_text); }
+    private void showError(String text) { setStatus(text, R.color.status_red_bg, R.color.status_red_text); }
 
     private void setStatus(String text, int backgroundColor, int textColor) {
         statusBox.setText(text);
@@ -488,15 +408,5 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         executor.shutdownNow();
         super.onDestroy();
-    }
-
-    private static class SetupConfig {
-        final String server;
-        final String token;
-
-        SetupConfig(String server, String token) {
-            this.server = server;
-            this.token = token;
-        }
     }
 }
