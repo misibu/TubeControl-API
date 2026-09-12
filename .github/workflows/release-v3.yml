@@ -24,6 +24,14 @@ jobs:
         shell: powershell
         working-directory: windows-v3
         run: ./generate-icon.ps1
+      - name: Normalize WinForms type reference
+        shell: powershell
+        working-directory: windows-v3
+        run: |
+          $p = 'MainForm.cs'
+          $s = Get-Content $p -Raw
+          $s = $s.Replace('root is Panel or FlowLayoutPanel or TableLayoutPanel', 'root is System.Windows.Forms.Panel or FlowLayoutPanel or TableLayoutPanel')
+          Set-Content $p $s -Encoding UTF8
       - name: Publish Windows x64
         working-directory: windows-v3
         run: dotnet publish TubeControl.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
