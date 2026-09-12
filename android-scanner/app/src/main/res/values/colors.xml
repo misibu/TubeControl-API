@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="status_neutral_bg">#ECEFF1</color>
+    <color name="status_neutral_text">#263238</color>
+    <color name="status_green_bg">#DDF6E4</color>
+    <color name="status_green_text">#14532D</color>
+    <color name="status_yellow_bg">#FFF3CD</color>
+    <color name="status_yellow_text">#664D03</color>
+    <color name="status_red_bg">#F8D7DA</color>
+    <color name="status_red_text">#842029</color>
+</resources>
