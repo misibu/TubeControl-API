@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.TubeControl" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/tc_black</item>
+        <item name="android:navigationBarColor">@color/tc_black</item>
+        <item name="android:windowBackground">@color/tc_black</item>
+        <item name="colorPrimary">@color/tc_emerald</item>
+        <item name="colorPrimaryVariant">@color/tc_emerald</item>
+        <item name="colorSecondary">@color/tc_mint</item>
+        <item name="android:textColorPrimary">@color/tc_white</item>
+        <item name="android:textColorSecondary">@color/tc_muted</item>
+    </style>
+</resources>

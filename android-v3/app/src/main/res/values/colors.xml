@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="tc_black">#050908</color>
+    <color name="tc_panel">#0A1612</color>
+    <color name="tc_panel_2">#0E1D18</color>
+    <color name="tc_emerald">#10B981</color>
+    <color name="tc_mint">#6CFFCB</color>
+    <color name="tc_white">#F7FFFC</color>
+    <color name="tc_muted">#91A89F</color>
+    <color name="status_neutral_bg">#102019</color>
+    <color name="status_neutral_text">#CDE6DD</color>
+    <color name="status_green_bg">#0B2B1F</color>
+    <color name="status_green_text">#6CFFCB</color>
+    <color name="status_yellow_bg">#2F290A</color>
+    <color name="status_yellow_text">#FFD65A</color>
+    <color name="status_red_bg">#321116</color>
+    <color name="status_red_text">#FF7B86</color>
+</resources>

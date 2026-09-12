@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tc_black"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="22dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="TubeControl"
+                android:textColor="@color/tc_white"
+                android:textSize="30sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/settingsButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="НАСТРОЙКИ"
+                android:textColor="@color/tc_mint" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:letterSpacing="0.16"
+            android:text="УЧЁТ · ВОЗВРАТ · ПОД КОНТРОЛЕМ"
+            android:textColor="@color/tc_muted"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/serverText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="Сервер: tubecontrol-api-msk-misibun.amvera.io"
+            android:textColor="@color/tc_muted"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:background="@drawable/tc_panel"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="НАВЕДИТЕ КАМЕРУ НА ШТРИХКОД"
+                android:textColor="@color/tc_muted"
+                android:textSize="12sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/scanButton"
+                android:layout_width="match_parent"
+                android:layout_height="68dp"
+                android:layout_marginTop="16dp"
+                android:text="СКАНИРОВАТЬ CODE 128"
+                android:textColor="@color/tc_black"
+                android:textSize="18sp"
+                app:backgroundTint="@color/tc_emerald"
+                app:cornerRadius="18dp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="РУЧНОЙ ВВОД THU"
+            android:textColor="@color/tc_white"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/thuInput"
+            android:layout_width="match_parent"
+            android:layout_height="58dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/tc_input"
+            android:hint="Например X0047937"
+            android:hintTextColor="@color/tc_muted"
+            android:imeOptions="actionDone"
+            android:inputType="textCapCharacters"
+            android:maxLines="1"
+            android:paddingHorizontal="16dp"
+            android:textColor="@color/tc_white" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/manualButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="10dp"
+            android:text="ЗАРЕГИСТРИРОВАТЬ THU"
+            android:textColor="@color/tc_mint"
+            app:cornerRadius="16dp"
+            app:strokeColor="@color/tc_emerald"
+            app:strokeWidth="1dp" />
+
+        <TextView
+            android:id="@+id/statusBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:background="@drawable/tc_status_card"
+            android:gravity="center"
+            android:minHeight="130dp"
+            android:padding="20dp"
+            android:text="Готов к сканированию"
+            android:textColor="@color/status_neutral_text"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:gravity="center"
+            android:text="Подключение нового устройства выполняется только по QR-коду из Windows-приложения"
+            android:textColor="@color/tc_muted"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+</ScrollView>
