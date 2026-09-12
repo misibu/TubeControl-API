@@ -1,0 +1,40 @@
+name: Generate go.sum
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Generate module metadata
+        run: go mod tidy
+
+      - name: Commit go.mod and go.sum if changed
+        run: |
+          if git diff --quiet -- go.mod go.sum && git status --porcelain go.sum | grep -q '^'; then
+            echo "No module changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add go.mod go.sum
+          if git diff --cached --quiet; then
+            echo "No module changes"
+            exit 0
+          fi
+          git commit -m "Generate go.sum"
+          git push
