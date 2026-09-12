@@ -8,7 +8,7 @@
     <ApplicationIcon>tubecontrol.ico</ApplicationIcon>
     <AssemblyName>TubeControl-Windows-v3</AssemblyName>
     <RootNamespace>TubeControl.Windows</RootNamespace>
-    <Version>3.3.0</Version>
+    <Version>3.4.0</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
