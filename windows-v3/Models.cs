@@ -9,6 +9,7 @@ public sealed class AppConfig
     public string DeviceId { get; set; } = "";
     public string DeviceName { get; set; } = Environment.MachineName;
     public string Theme { get; set; } = "dark";
+    public int OverdueDays { get; set; } = 14;
 }
 
 public sealed class TubeItem
