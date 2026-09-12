@@ -1,0 +1,38 @@
+name: Enable TubeControl v3 routes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/enable_v3.py'
+      - 'site.go'
+      - 'status.go'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Enable v3 routes
+        run: |
+          python scripts/enable_v3.py
+          gofmt -w main.go site.go status.go
+          go test ./...
+      - name: Commit route registration
+        run: |
+          if git diff --quiet; then
+            echo "Already enabled"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.go site.go status.go
+          git commit -m "Enable TubeControl v3 website and status routes"
+          git push
