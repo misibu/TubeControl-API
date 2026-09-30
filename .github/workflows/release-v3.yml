@@ -17,6 +17,7 @@ on:
       - 'scripts/patch_windows_v382.py'
       - 'scripts/patch_windows_v383.py'
       - 'scripts/patch_windows_v384.py'
+      - 'scripts/patch_windows_v385.py'
       - '.github/workflows/release-v3.yml'
   workflow_dispatch:
 
@@ -56,6 +57,8 @@ jobs:
         run: python scripts/patch_windows_v383.py
       - name: Apply Windows v3.8.4 startup font compatibility
         run: python scripts/patch_windows_v384.py
+      - name: Apply Windows v3.8.5 hardened font startup
+        run: python scripts/patch_windows_v385.py
       - name: Generate TubeControl icon
         shell: powershell
         working-directory: windows-v3
