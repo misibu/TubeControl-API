@@ -55,7 +55,7 @@ func registerWebRoutes(mux *http.ServeMux, a *App) {
 	mux.Handle("POST /api/web/logout", a.requireDB(http.HandlerFunc(a.webLogout)))
 
 	mux.Handle("GET /api/web/tubes", a.requireDB(a.requireWebAuth(http.HandlerFunc(a.webListTubes))))
-	mux.Handle("GET /api/web/export", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webExport))))
+	mux.Handle("GET /api/web/export", a.requireDB(a.requireWebAuth(http.HandlerFunc(a.webExport))))
 	mux.Handle("POST /api/web/import", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webImportExcel))))
 	mux.Handle("POST /api/web/tubes", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.importTubes))))
 	mux.Handle("POST /api/web/returns", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.registerReturn))))
@@ -562,21 +562,64 @@ func parseWebExcelDate(v string) (time.Time, error) {
 
 func (a *App) webExport(w http.ResponseWriter, r *http.Request) {
 	user := requestWebUser(r)
-	items, err := a.queryWebTubes(r.Context(), user, r.URL.Query().Get("q"), strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status"))))
+	category := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("category")))
+	status := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+	if category != "" && category != "current" {
+		status = "all"
+	}
+	items, err := a.queryWebTubes(r.Context(), user, r.URL.Query().Get("q"), status)
 	if err != nil {
 		writeError(w, 500, "database_error", "Не удалось подготовить выгрузку")
 		return
 	}
+
 	filtered := make([]TubeV3, 0, len(items))
+	sheet := "Выгрузка"
+	suffix := "vygruzka"
 	for _, t := range items {
-		if t.Status != "returned" {
+		include := true
+		switch category {
+		case "", "not_returned":
+			include = t.Status != "returned"
+			sheet = "Не возвращены"
+			suffix = "ne_vozvrasheny"
+		case "current":
+			sheet = "Текущая выборка"
+			suffix = "tekushaya_vyborka"
+		case "all":
+			sheet = "Все доступные"
+			suffix = "vse_dostupnye"
+		case "overdue":
+			include = t.Status == "overdue"
+			sheet = "Просроченные"
+			suffix = "prosrochennye"
+		case "returned":
+			include = t.Status == "returned"
+			sheet = "Возвращённые"
+			suffix = "vozvrashennye"
+		case "transit":
+			include = t.Status == "transit"
+			sheet = "В пути"
+			suffix = "v_puti"
+		case "sent":
+			include = t.Status == "sent"
+			sheet = "Отправленные"
+			suffix = "otpravlennye"
+		case "lost":
+			include = t.Status == "lost"
+			sheet = "Потерянные"
+			suffix = "poteryannye"
+		default:
+			writeError(w, 400, "invalid_category", "Неизвестная категория выгрузки")
+			return
+		}
+		if include {
 			filtered = append(filtered, t)
 		}
 	}
 
 	f := excelize.NewFile()
 	defer f.Close()
-	sheet := "Не возвращены"
 	_ = f.SetSheetName("Sheet1", sheet)
 	headers := []string{"THU", "Дата отправки", "Магазин", "№ заказа", "Статус"}
 	for i, h := range headers {
@@ -603,7 +646,7 @@ func (a *App) webExport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "export_error", "Не удалось сформировать Excel")
 		return
 	}
-	filename := "TubeControl_ne_vozvrasheny_" + time.Now().Format("20060102_1504") + ".xlsx"
+	filename := "TubeControl_" + suffix + "_" + time.Now().Format("20060102_1504") + ".xlsx"
 	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	w.WriteHeader(200)
@@ -792,7 +835,7 @@ const webPortalHTML = `<!doctype html>
   <div class="searchrow">
     <div class="searchbox"><input id="search" class="input" placeholder="Поиск: THU, № заказа или последние 4 цифры заказа" oninput="debouncedLoad()"></div>
     <select id="statusFilter" class="select" onchange="loadTubes()"><option value="all">Все статусы</option><option value="sent">Отправлен</option><option value="transit">В пути</option><option value="returned">Возвращён</option><option value="lost">Потерян</option><option value="overdue">Просрочен</option></select>
-    <div style="display:flex;gap:10px;justify-content:flex-end"><button id="copyBtn" class="btn" onclick="copySelected()" disabled>Копировать данные</button><button class="btn" onclick="loadTubes()">↻</button></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap"><button id="copyBtn" class="btn" onclick="copySelected()" disabled>Копировать данные</button><button class="btn" onclick="openModal('exportModal')">Выгрузка</button><button class="btn" onclick="loadTubes()">↻</button></div>
   </div>
   <div class="card">
     <div class="tablewrap">
@@ -810,6 +853,7 @@ const webPortalHTML = `<!doctype html>
 <div id="clientsModal" class="modalback hidden"><div class="modal"><h2>Клиенты</h2><div class="field"><label>Название клиента</label><input id="clientName" class="input"></div><div class="field"><label>Логин</label><input id="clientLogin" class="input"></div><div class="field"><label>Пароль (минимум 8 символов)</label><input id="clientPassword" type="password" class="input"></div><div class="field"><label>Ограничить кодом магазина (необязательно)</label><input id="clientStore" class="input" placeholder="Например: 0042"></div><button class="btn primary" onclick="createClient()">Создать клиента</button><div id="clientsList" class="clients"></div><div class="modalactions"><button class="btn" onclick="closeModal('clientsModal')">Закрыть</button></div></div></div>
 <div id="androidModal" class="modalback hidden"><div class="modal"><h2>Подключить Android</h2><p style="color:var(--muted);margin-top:-6px">Откройте TubeControl на телефоне и отсканируйте этот QR-код.</p><div style="display:grid;place-items:center;margin:18px 0"><img id="androidQr" alt="QR подключения" style="width:320px;max-width:90%;border-radius:20px;background:white;padding:12px"></div><div id="androidCode" style="text-align:center;color:var(--mint);font-weight:800"></div><div class="modalactions"><button class="btn" onclick="closeModal('androidModal')">Закрыть</button><button class="btn primary" onclick="makeAndroidQr()">Новый QR</button></div></div></div>
 <div id="devicesModal" class="modalback hidden"><div class="modal"><h2>Android устройства</h2><div id="devicesList" class="clients"></div><div class="modalactions"><button class="btn" onclick="closeModal('devicesModal')">Закрыть</button></div></div></div>
+<div id="exportModal" class="modalback hidden"><div class="modal"><h2>Выгрузка Excel</h2><p style="color:var(--muted);margin-top:-6px">Выберите категорию. Для клиента выгружаются только доступные ему отправления.</p><div class="clients"><button class="btn" onclick="exportCategory('current')">Текущая выборка</button><button class="btn" onclick="exportCategory('all')">Все доступные</button><button class="btn" onclick="exportCategory('not_returned')">Не возвращены</button><button class="btn" onclick="exportCategory('overdue')">Просроченные</button><button class="btn" onclick="exportCategory('returned')">Возвращённые</button><button class="btn" onclick="exportCategory('transit')">В пути</button><button class="btn" onclick="exportCategory('sent')">Отправленные</button><button class="btn" onclick="exportCategory('lost')">Потерянные</button></div><div class="modalactions"><button class="btn" onclick="closeModal('exportModal')">Закрыть</button></div></div></div>
 <div id="toast" class="toast hidden"></div>
 
 <script>
@@ -836,7 +880,7 @@ function openEdit(){if(!selected)return;$('editTitle').textContent='Измени
 async function saveStatus(){if(!selected)return;try{await api('/api/web/tubes/'+encodeURIComponent(selected.thu)+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:$('editStatus').value,comment:$('editComment').value})});closeModal('editModal');toast('Статус сохранён');loadTubes()}catch(e){toast(e.message,true)}}
 function pickImport(){$('importFile').value='';$('importFile').click()}
 async function importExcel(el){if(!el.files||!el.files[0])return;const fd=new FormData();fd.append('file',el.files[0]);try{const x=await api('/api/web/import',{method:'POST',body:fd});toast('Импортировано: '+x.processed);loadTubes()}catch(e){toast(e.message,true)}}
-function exportExcel(){const q=encodeURIComponent($('search').value.trim());const s=encodeURIComponent($('statusFilter').value);location.href='/api/web/export?q='+q+'&status='+s}
+function exportExcel(){exportCategory('not_returned')}function exportCategory(category){const q=encodeURIComponent($('search').value.trim());const s=encodeURIComponent($('statusFilter').value);closeModal('exportModal');location.href='/api/web/export?q='+q+'&status='+s+'&category='+encodeURIComponent(category)}
 async function openAndroidPair(){openModal('androidModal');await makeAndroidQr()}
 async function makeAndroidQr(){try{const x=await api('/api/web/android/enrollment',{method:'POST'});$('androidQr').src=x.qr_png;$('androidCode').textContent='Код действует 10 минут · '+x.code}catch(e){toast(e.message,true)}}
 async function openDevices(){openModal('devicesModal');await loadDevices()}
@@ -846,6 +890,6 @@ async function openClients(){openModal('clientsModal');await loadClients()}
 async function loadClients(){try{const x=await api('/api/web/users');const box=$('clientsList');box.innerHTML='';for(const u of x.items||[]){if(u.role!=='client')continue;const row=document.createElement('div');row.className='clientrow';row.innerHTML='<div><strong>'+esc(u.display_name||u.username)+'</strong><div class="clientmeta">Логин: '+esc(u.username)+(u.store_code_filter?' · Магазин: '+esc(u.store_code_filter):' · Все отправления')+'</div></div><button class="btn '+(u.active?'danger':'')+'">'+(u.active?'Отключить':'Включить')+'</button>';row.querySelector('button').onclick=function(){setClientState(u.id,!u.active)};box.appendChild(row)}}catch(e){toast(e.message,true)}}
 async function createClient(){try{await api('/api/web/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:$('clientName').value,username:$('clientLogin').value,password:$('clientPassword').value,store_code_filter:$('clientStore').value})});$('clientPassword').value='';toast('Клиент создан');loadClients()}catch(e){toast(e.message,true)}}
 async function setClientState(id,active){try{await api('/api/web/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:active})});loadClients()}catch(e){toast(e.message,true)}}
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){for(const id of ['addModal','returnModal','editModal','clientsModal','androidModal','devicesModal'])closeModal(id)}});boot();
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){for(const id of ['addModal','returnModal','editModal','clientsModal','androidModal','devicesModal','exportModal'])closeModal(id)}});boot();
 </script>
 </body></html>`
