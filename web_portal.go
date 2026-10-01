@@ -405,8 +405,7 @@ func (a *App) webImportExcel(w http.ResponseWriter, r *http.Request) {
 	}
 	sheet := sheets[0]
 
-	dateText, _ := wb.GetCellValue(sheet, "H6")
-	shippedAt, err := parseWebExcelDate(dateText)
+	shippedAt, err := parseWebExcelDateCell(wb, sheet, "H6")
 	if err != nil {
 		writeError(w, 400, "invalid_date", "Не удалось прочитать дату отгрузки из H6")
 		return
@@ -510,9 +509,44 @@ func normWebHeader(v string) string {
 	return strings.ToUpper(strings.Join(strings.Fields(strings.ReplaceAll(v, "\u00A0", " ")), " "))
 }
 
+func parseWebExcelDateCell(wb *excelize.File, sheet, cell string) (time.Time, error) {
+	values := make([]string, 0, 3)
+	if v, err := wb.GetCellValue(sheet, cell); err == nil {
+		values = append(values, v)
+	}
+	if v, err := wb.GetCellValue(sheet, cell, excelize.Options{RawCellValue: true}); err == nil {
+		values = append(values, v)
+	}
+	if formula, err := wb.GetCellFormula(sheet, cell); err == nil && strings.TrimSpace(formula) != "" {
+		if v, err := wb.CalcCellValue(sheet, cell); err == nil {
+			values = append(values, v)
+		}
+	}
+
+	seen := make(map[string]bool)
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		if t, err := parseWebExcelDate(v); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, errors.New("invalid date")
+}
+
 func parseWebExcelDate(v string) (time.Time, error) {
 	v = strings.TrimSpace(v)
-	layouts := []string{"02.01.2006", "2.1.2006", "2006-01-02", "02/01/2006", "2/1/2006", time.RFC3339}
+	v = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(v, " г.", ""), "г.", ""))
+	layouts := []string{
+		"02.01.2006", "2.1.2006", "02.01.06", "2.1.06",
+		"02.01.2006 15:04", "2.1.2006 15:04", "02.01.2006 15:04:05", "2.1.2006 15:04:05",
+		"2006-01-02", "2006-01-02 15:04", "2006-01-02 15:04:05",
+		"02/01/2006", "2/1/2006", "02/01/2006 15:04", "2/1/2006 15:04",
+		time.RFC3339, time.RFC3339Nano,
+	}
 	for _, layout := range layouts {
 		if t, err := time.Parse(layout, v); err == nil {
 			return t, nil
