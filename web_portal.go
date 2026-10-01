@@ -722,7 +722,7 @@ const webPortalHTML = `<!doctype html>
     <button class="btn" onclick="openModal('returnModal')">Возврат</button>
     <button id="editBtn" class="btn" onclick="openEdit()" disabled>Редактировать</button>
     <button class="btn" onclick="exportExcel()">Выгрузить</button>
-    <button class="btn" onclick="openClients()">Клиенты</button>
+    <button class="btn" onclick="openAndroidPair()">Подключить Android</button><button class="btn" onclick="openDevices()">Устройства</button><button class="btn" onclick="openClients()">Клиенты</button>
     <input id="importFile" type="file" accept=".xlsx,.xlsm" class="hidden" onchange="importExcel(this)">
   </div>
   <div class="searchrow">
