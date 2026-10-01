@@ -681,7 +681,7 @@ const webPortalHTML = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TubeControl — веб-кабинет</title>
-<meta name="theme-color" content="#06100d">
+<meta name="theme-color" content="#06100d">\n<meta name="description" content="TubeControl — веб-кабинет учета и возврата тубусов">
 <style>
 :root{--bg:#06100d;--bg2:#0a1713;--panel:#10201b;--panel2:#132823;--mint:#75ffd0;--emerald:#19d99a;--line:#58e9bb;--text:#f6fffb;--muted:#9eb7ae;--danger:#ff6b72;--yellow:#ffd43b;--blue:#67b7ff;--orange:#ff9a55}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:"Segoe UI",Arial,sans-serif;background:radial-gradient(circle at 20% 0,#0d2a20 0,#06100d 34%,#040a08 100%);color:var(--text)}button,input,select,textarea{font:inherit}.hidden{display:none!important}
