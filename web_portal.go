@@ -33,6 +33,7 @@ type WebUser struct {
 type webLoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Role     string `json:"role,omitempty"`
 }
 
 type webCreateUserRequest struct {
@@ -187,6 +188,11 @@ func (a *App) webLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Username = normalizeWebUsername(req.Username)
+	req.Role = strings.ToLower(strings.TrimSpace(req.Role))
+	if req.Role != "" && req.Role != "admin" && req.Role != "client" {
+		writeError(w, http.StatusBadRequest, "invalid_role", "Некорректный тип входа")
+		return
+	}
 
 	var user WebUser
 	var passwordHash string
@@ -194,8 +200,8 @@ func (a *App) webLogin(w http.ResponseWriter, r *http.Request) {
 SELECT id,username,display_name,password_hash,role,store_code_filter,active
 FROM web_users WHERE username=$1
 `, req.Username).Scan(&user.ID, &user.Username, &user.DisplayName, &passwordHash, &user.Role, &user.StoreCodeFilter, &user.Active)
-	if err != nil || !user.Active || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
-		writeError(w, http.StatusUnauthorized, "invalid_login", "Неверный логин или пароль")
+	if err != nil || !user.Active || (req.Role != "" && user.Role != req.Role) || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
+		writeError(w, http.StatusUnauthorized, "invalid_login", "Неверный логин, пароль или выбранный тип входа")
 		return
 	}
 	if err := a.webStartSession(w, r, user.ID); err != nil {
@@ -688,28 +694,48 @@ const webPortalHTML = `<!doctype html>
 .wrap{width:min(1480px,94vw);margin:auto}.top{height:92px;border-bottom:1px solid rgba(117,255,208,.14);display:flex;align-items:center}.toprow{display:flex;align-items:center;justify-content:space-between;gap:24px;width:100%}.logo{font-size:38px;font-weight:800;letter-spacing:-1.4px}.logo span{color:var(--mint)}.tag{margin-top:5px;color:var(--mint);font-size:11px;font-weight:800;letter-spacing:.13em}
 .userbox{display:flex;align-items:center;gap:12px;color:var(--muted)}.role{border:1px solid rgba(117,255,208,.4);border-radius:999px;padding:7px 11px;color:var(--mint);font-size:12px;font-weight:800}
 .btn{height:42px;border:1px solid var(--line);border-radius:21px;background:transparent;color:var(--text);padding:0 18px;font-weight:750;cursor:pointer;transition:.15s}.btn:hover{background:rgba(25,217,154,.10)}.btn.primary{background:linear-gradient(180deg,#2ee6b0,#15cf96);color:#032018;border-color:#90ffdf}.btn.danger{border-color:rgba(255,107,114,.6);color:#ff9da2}.btn:disabled{opacity:.4;cursor:not-allowed}
-.auth{min-height:100vh;display:grid;place-items:center;padding:30px}.authcard{width:min(480px,94vw);border:1px solid rgba(117,255,208,.45);border-radius:30px;background:linear-gradient(180deg,rgba(17,42,34,.94),rgba(7,18,14,.96));padding:34px;box-shadow:0 30px 90px rgba(0,0,0,.35)}.authcard h1{margin:20px 0 8px;font-size:28px}.authcard p{color:var(--muted);margin:0 0 24px}.field{display:flex;flex-direction:column;gap:7px;margin:13px 0}.field label{font-size:13px;color:var(--muted);font-weight:700}.input,.select,.textarea{width:100%;border:1px solid rgba(117,255,208,.35);border-radius:18px;background:#07130f;color:var(--text);outline:none;padding:0 15px}.input,.select{height:44px}.textarea{padding-top:12px;min-height:92px;resize:vertical}.input:focus,.select:focus,.textarea:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(117,255,208,.08)}
+.auth{min-height:100vh;display:grid;place-items:center;padding:30px}.authcard{width:min(720px,94vw);border:1px solid rgba(117,255,208,.45);border-radius:30px;background:linear-gradient(180deg,rgba(17,42,34,.94),rgba(7,18,14,.96));padding:34px;box-shadow:0 30px 90px rgba(0,0,0,.35)}.authcard h1{margin:20px 0 8px;font-size:28px}.authcard p{color:var(--muted);margin:0 0 24px}.roleintro{text-align:center}.roleintro .tag{margin-bottom:28px}.rolegrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px}.rolecard{min-height:190px;border:1px solid rgba(117,255,208,.30);border-radius:24px;background:rgba(7,19,15,.72);color:var(--text);padding:24px;text-align:left;cursor:pointer;transition:.18s ease}.rolecard:hover{transform:translateY(-2px);border-color:var(--mint);background:rgba(19,51,40,.78);box-shadow:0 18px 46px rgba(0,0,0,.22)}.roleicon{width:50px;height:50px;border-radius:16px;display:grid;place-items:center;margin-bottom:22px;background:rgba(117,255,208,.10);border:1px solid rgba(117,255,208,.32);color:var(--mint);font-size:24px;font-weight:900}.rolecard strong{display:block;font-size:21px;margin-bottom:8px}.rolecard span{display:block;color:var(--muted);font-size:13px;line-height:1.5}.authform{width:min(480px,100%);margin:0 auto}.backrole{display:inline-flex;align-items:center;gap:7px;margin-top:4px;border:0;background:transparent;color:var(--mint);padding:0;cursor:pointer;font-weight:750}.field{display:flex;flex-direction:column;gap:7px;margin:13px 0}.field label{font-size:13px;color:var(--muted);font-weight:700}.input,.select,.textarea{width:100%;border:1px solid rgba(117,255,208,.35);border-radius:18px;background:#07130f;color:var(--text);outline:none;padding:0 15px}.input,.select{height:44px}.textarea{padding-top:12px;min-height:92px;resize:vertical}.input:focus,.select:focus,.textarea:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(117,255,208,.08)}
 .main{padding:28px 0 46px}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}.searchrow{display:grid;grid-template-columns:minmax(320px,680px) 210px 1fr;gap:12px;margin:12px 0 18px}.searchbox{position:relative}.searchbox:before{content:"⌕";position:absolute;left:16px;top:9px;color:var(--mint);font-size:22px}.searchbox .input{padding-left:46px;border-color:var(--line)}
 .card{border:1px solid rgba(117,255,208,.28);border-radius:24px;background:linear-gradient(180deg,rgba(16,32,27,.92),rgba(8,18,14,.92));overflow:hidden}.tablewrap{overflow:auto;max-height:calc(100vh - 300px)}table{width:100%;border-collapse:collapse;min-width:980px}thead{position:sticky;top:0;z-index:2;background:#0b1d17}th{font-size:12px;color:#a9c1b8;text-align:left;padding:15px 14px;border-bottom:1px solid rgba(117,255,208,.18)}td{padding:14px;border-bottom:1px solid rgba(117,255,208,.10);font-size:14px}tbody tr{cursor:pointer;transition:.12s}tbody tr:hover{background:rgba(117,255,208,.045)}tbody tr.selected{background:rgba(25,217,154,.12);box-shadow:inset 3px 0 0 var(--mint)}.mark{width:18px;height:18px;border:1px solid #5f897a;border-radius:5px;display:grid;place-items:center;color:#031a11}.selected .mark{background:var(--mint);border-color:var(--mint)}.status{display:inline-flex;align-items:center;gap:8px;border:1px solid currentColor;border-radius:999px;padding:6px 11px;font-weight:750;font-size:12px}.status:before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}.s-sent{color:var(--blue)}.s-transit{color:var(--yellow)}.s-returned{color:var(--mint)}.s-lost{color:var(--danger)}.s-overdue{color:var(--orange)}
 .footerline{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;color:var(--muted);font-size:13px}.copyhint{color:var(--mint)}
 .modalback{position:fixed;inset:0;background:rgba(0,0,0,.66);display:grid;place-items:center;padding:18px;z-index:20}.modal{width:min(560px,96vw);max-height:90vh;overflow:auto;border:1px solid rgba(117,255,208,.5);border-radius:28px;background:#0a1813;padding:28px;box-shadow:0 28px 90px rgba(0,0,0,.55)}.modal h2{margin:0 0 18px}.modalactions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}.clients{margin-top:18px;display:grid;gap:8px}.clientrow{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;border:1px solid rgba(117,255,208,.18);border-radius:17px;padding:12px}.clientmeta{color:var(--muted);font-size:12px;margin-top:4px}.toast{position:fixed;right:22px;bottom:22px;z-index:50;max-width:420px;padding:15px 18px;border:1px solid var(--line);border-radius:18px;background:#10201b;box-shadow:0 18px 50px #000}.toast.err{border-color:var(--danger)}.empty{padding:46px;text-align:center;color:var(--muted)}
-@media(max-width:850px){.top{height:auto;padding:18px 0}.toprow{align-items:flex-start}.userbox{flex-wrap:wrap;justify-content:flex-end}.searchrow{grid-template-columns:1fr}.toolbar .btn{flex:1;min-width:140px}.main{padding-top:18px}.tablewrap{max-height:none}.logo{font-size:32px}}
+@media(max-width:850px){.top{height:auto;padding:18px 0}.toprow{align-items:flex-start}.userbox{flex-wrap:wrap;justify-content:flex-end}.searchrow{grid-template-columns:1fr}.toolbar .btn{flex:1;min-width:140px}.main{padding-top:18px}.tablewrap{max-height:none}.logo{font-size:32px}}@media(max-width:620px){.auth{padding:16px}.authcard{padding:24px 20px}.rolegrid{grid-template-columns:1fr}.rolecard{min-height:150px}.roleintro .logo{font-size:36px}}
 </style>
 </head>
 <body>
 <section id="auth" class="auth">
   <div class="authcard">
-    <div class="logo">Tube<span>Control</span></div><div class="tag">УЧЕТ И КОНТРОЛЬ</div>
-    <div id="setupBox" class="hidden">
+    <div id="roleBox" class="roleintro">
+      <div class="logo">Tube<span>Control</span></div><div class="tag">УЧЕТ И КОНТРОЛЬ</div>
+      <h1>Выберите режим входа</h1>
+      <p>Укажите, как вы хотите войти в веб-версию TubeControl.</p>
+      <div class="rolegrid">
+        <button class="rolecard" onclick="chooseRole('admin')">
+          <span class="roleicon">A</span>
+          <strong>Администратор</strong>
+          <span>Полный доступ: импорт, возвраты, статусы, клиенты и подключение устройств.</span>
+        </button>
+        <button class="rolecard" onclick="chooseRole('client')">
+          <span class="roleicon">К</span>
+          <strong>Клиент</strong>
+          <span>Просмотр доступных отправлений, поиск и копирование информации.</span>
+        </button>
+      </div>
+    </div>
+    <div id="setupBox" class="authform hidden">
+      <div class="logo">Tube<span>Control</span></div><div class="tag">АДМИНИСТРАТОР</div>
+      <button class="backrole" onclick="showRoleChoice()">← Назад к выбору</button>
       <h1>Создание администратора</h1>
       <p>Первый вход. Создайте логин и пароль администратора веб-кабинета.</p>
       <div class="field"><label>Логин</label><input id="setupLogin" class="input" autocomplete="username"></div>
       <div class="field"><label>Пароль</label><input id="setupPassword" type="password" class="input" autocomplete="new-password"></div>
       <button class="btn primary" style="width:100%;margin-top:10px" onclick="setupAdmin()">СОЗДАТЬ АДМИНИСТРАТОРА</button>
     </div>
-    <div id="loginBox" class="hidden">
-      <h1>Вход в кабинет</h1>
-      <p>Администратор получает полный доступ. Клиент — только просмотр и копирование.</p>
+    <div id="loginBox" class="authform hidden">
+      <div class="logo">Tube<span>Control</span></div><div id="loginRoleTag" class="tag"></div>
+      <button class="backrole" onclick="showRoleChoice()">← Назад к выбору</button>
+      <h1 id="loginTitle">Вход в кабинет</h1>
+      <p id="loginText"></p>
       <div class="field"><label>Логин</label><input id="login" class="input" autocomplete="username"></div>
       <div class="field"><label>Пароль</label><input id="password" type="password" class="input" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginUser()"></div>
       <button class="btn primary" style="width:100%;margin-top:10px" onclick="loginUser()">ВОЙТИ</button>
@@ -753,14 +779,14 @@ const webPortalHTML = `<!doctype html>
 <div id="toast" class="toast hidden"></div>
 
 <script>
-let me=null, items=[], selected=null, timer=null;
+let me=null, items=[], selected=null, timer=null, selectedRole='', needsSetup=false;
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 async function api(url,opt){const r=await fetch(url,opt);let x={};const ct=r.headers.get('content-type')||'';if(ct.includes('application/json'))x=await r.json();if(!r.ok)throw new Error(x.message||x.error||('HTTP '+r.status));return x}
 function toast(t,err){const x=$('toast');x.textContent=t;x.className='toast'+(err?' err':'');setTimeout(()=>x.className='toast hidden',4200)}
-async function boot(){try{const x=await api('/api/web/bootstrap');if(x.needs_setup){$('setupBox').classList.remove('hidden');$('loginBox').classList.add('hidden');return}if(!x.authenticated){$('loginBox').classList.remove('hidden');$('setupBox').classList.add('hidden');return}enterApp(x.user)}catch(e){toast(e.message,true)}}
+function showRoleChoice(){selectedRole='';$('roleBox').classList.remove('hidden');$('setupBox').classList.add('hidden');$('loginBox').classList.add('hidden');$('password').value=''}function chooseRole(role){selectedRole=role;if(role==='client'&&needsSetup){toast('Сначала необходимо создать администратора',true);return}$('roleBox').classList.add('hidden');if(role==='admin'&&needsSetup){$('setupBox').classList.remove('hidden');$('loginBox').classList.add('hidden');setTimeout(()=>$('setupLogin').focus(),0);return}$('setupBox').classList.add('hidden');$('loginBox').classList.remove('hidden');$('loginRoleTag').textContent=role==='admin'?'АДМИНИСТРАТОР':'КЛИЕНТ';$('loginTitle').textContent=role==='admin'?'Вход администратора':'Вход клиента';$('loginText').textContent=role==='admin'?'Полный доступ к управлению TubeControl.':'Просмотр доступных отправлений, поиск и копирование данных.';setTimeout(()=>$('login').focus(),0)}async function boot(){try{const x=await api('/api/web/bootstrap');needsSetup=!!x.needs_setup;if(x.authenticated){enterApp(x.user);return}showRoleChoice()}catch(e){toast(e.message,true)}}
 async function setupAdmin(){try{const x=await api('/api/web/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('setupLogin').value,password:$('setupPassword').value})});enterApp(x.user)}catch(e){toast(e.message,true)}}
-async function loginUser(){try{const x=await api('/api/web/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('login').value,password:$('password').value})});enterApp(x.user)}catch(e){toast(e.message,true)}}
+async function loginUser(){if(!selectedRole){showRoleChoice();return}try{const x=await api('/api/web/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('login').value,password:$('password').value,role:selectedRole})});enterApp(x.user)}catch(e){toast(e.message,true)}}
 async function logoutUser(){try{await api('/api/web/logout',{method:'POST'})}finally{location.reload()}}
 function enterApp(u){me=u;$('auth').classList.add('hidden');$('app').classList.remove('hidden');$('displayName').textContent=u.display_name||u.username;$('role').textContent=u.role==='admin'?'АДМИНИСТРАТОР':'КЛИЕНТ';if(u.role==='admin')$('adminToolbar').classList.remove('hidden');loadTubes()}
 function debouncedLoad(){clearTimeout(timer);timer=setTimeout(loadTubes,220)}
