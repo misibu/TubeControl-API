@@ -58,7 +58,11 @@ func registerWebRoutes(mux *http.ServeMux, a *App) {
 	mux.Handle("POST /api/web/import", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webImportExcel))))
 	mux.Handle("POST /api/web/tubes", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.importTubes))))
 	mux.Handle("POST /api/web/returns", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.registerReturn))))
-	mux.Handle("PATCH /api/web/tubes/{thu}/status", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.updateTubeStatus))))\n\n\tmux.Handle("POST /api/web/android/enrollment", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webAndroidEnrollment))))\n\tmux.Handle("GET /api/web/devices", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webDeviceList))))\n\tmux.Handle("POST /api/web/devices/{id}/revoke", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webDeviceRevoke))))
+	mux.Handle("PATCH /api/web/tubes/{thu}/status", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.updateTubeStatus))))
+
+	mux.Handle("POST /api/web/android/enrollment", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webAndroidEnrollment))))
+	mux.Handle("GET /api/web/devices", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webDeviceList))))
+	mux.Handle("POST /api/web/devices/{id}/revoke", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webDeviceRevoke))))
 
 	mux.Handle("GET /api/web/users", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webListUsers))))
 	mux.Handle("POST /api/web/users", a.requireDB(a.requireWebAdmin(http.HandlerFunc(a.webCreateClient))))
