@@ -80,6 +80,7 @@ func main() {
 	registerDeviceRoutes(mux, app)
 	registerSiteRoutes(mux, app)
 	registerStatusRoutes(mux, app)
+	registerWebRoutes(mux, app)
 
 	port := envDefault("PORT", "8080")
 	addr := "0.0.0.0:" + port
@@ -114,6 +115,9 @@ func (a *App) initializeDatabase(ctx context.Context) {
 		}
 		if err == nil {
 			err = a.ensureBootstrapActivation(checkCtx)
+		}
+		if err == nil {
+			err = a.ensureWebSchema(checkCtx)
 		}
 		cancel()
 		if err == nil {
