@@ -105,6 +105,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: [windows, android]
+    if: ${{ always() && needs.windows.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -114,6 +115,7 @@ jobs:
           name: windows-v3
           path: dist
       - uses: actions/download-artifact@v4
+        if: ${{ needs.android.result == 'success' }}
         with:
           name: android-v3
           path: dist
@@ -126,4 +128,7 @@ jobs:
           git tag -f v3-latest "$GITHUB_SHA"
           git push origin refs/tags/v3-latest --force
           gh release view v3-latest >/dev/null 2>&1 || gh release create v3-latest --title "TubeControl v3 — актуальная сборка" --notes "Автоматическая актуальная сборка TubeControl v3 для Windows и Android." --prerelease
-          gh release upload v3-latest dist/TubeControl-Windows-v3.exe dist/TubeControl-Scanner-v3.apk --clobber
+          gh release upload v3-latest dist/TubeControl-Windows-v3.exe --clobber
+          if [ -f dist/TubeControl-Scanner-v3.apk ]; then
+            gh release upload v3-latest dist/TubeControl-Scanner-v3.apk --clobber
+          fi
