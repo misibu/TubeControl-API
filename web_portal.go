@@ -110,7 +110,7 @@ func (a *App) webBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 	user, _ := a.webCurrentUser(r)
 	writeJSON(w, 200, map[string]any{
-		"needs_setup":  count == 0,
+		"needs_setup":   count == 0,
 		"authenticated": user != nil,
 		"user":          user,
 	})
