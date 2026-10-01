@@ -215,6 +215,7 @@ public sealed class DeviceListResponse
 ''', encoding="utf-8", newline="\n")
 
 api_path.write_text(r'''using System.Net;
+using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using Newtonsoft.Json;
@@ -461,8 +462,10 @@ e = e.replace(
 )
 excel_path.write_text(e, encoding="utf-8", newline="\n")
 
-# Remove .NET Core-only TextBox.PlaceholderText and Math.Clamp usages.
+# Remove .NET Core-only TextBox.PlaceholderText/Math.Clamp/System.Text.Json usages.
 m = main_path.read_text(encoding="utf-8")
+m = m.replace('using System.Text.Json;\n', 'using Newtonsoft.Json;\n')
+m = m.replace('JsonSerializer.Serialize(', 'JsonConvert.SerializeObject(')
 m = m.replace(
     'private readonly TextBox _search = new() { PlaceholderText = "Поиск по THU, заказу или магазину…" };',
     'private readonly TextBox _search = new();'
