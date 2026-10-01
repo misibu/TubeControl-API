@@ -7,6 +7,10 @@ on:
       - 'scripts/enable_v3.py'
       - 'site.go'
       - 'status.go'
+      - 'web_portal.go'
+      - 'main.go'
+      - 'go.mod'
+      - 'go.sum'
   workflow_dispatch:
 
 permissions:
@@ -23,7 +27,7 @@ jobs:
       - name: Enable v3 routes
         run: |
           python scripts/enable_v3.py
-          gofmt -w main.go site.go status.go
+          gofmt -w main.go site.go status.go web_portal.go
           go test ./...
       - name: Commit route registration
         run: |
@@ -33,6 +37,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add main.go site.go status.go
+          git add main.go site.go status.go web_portal.go go.mod go.sum
           git commit -m "Enable TubeControl v3 website and status routes"
           git push
