@@ -42,6 +42,9 @@ project_path.write_text(r'''<Project Sdk="Microsoft.NET.Sdk">
     <PackageReference Include="Fody" Version="6.8.2" PrivateAssets="all" />
     <PackageReference Include="Costura.Fody" Version="5.7.0" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Security" />
+  </ItemGroup>
 </Project>
 ''', encoding="utf-8", newline="\n")
 
@@ -475,6 +478,8 @@ m = m.replace(
     'private readonly TextBox _comment = new() { Multiline = true, MaxLength = 500, BorderStyle = BorderStyle.FixedSingle };'
 )
 m = m.replace('            PlaceholderText = placeholder,\n', '')
+m = re.sub(r'\s*PlaceholderText\s*=\s*placeholder\s*,?', '', m)
+m = re.sub(r'\s*PlaceholderText\s*=\s*"[^"]*"\s*,?', '', m)
 m = m.replace(
     'Math.Clamp(_config.OverdueDays, 1, 365)',
     'Math.Min(365, Math.Max(1, _config.OverdueDays))'
