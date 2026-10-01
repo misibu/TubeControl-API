@@ -14,7 +14,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/xuri/excelize/v2"
 	"golang.org/x/crypto/bcrypt"
 )
