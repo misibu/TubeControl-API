@@ -51,3 +51,8 @@ The server creates its PostgreSQL tables and indexes automatically on startup.
 ```
 
 Possible responses include `returned`, `already_returned`, and `not_found`.
+
+
+## Восстановление доступа администратора
+
+Для безопасного сброса логина/пароля веб-кабинета задайте в переменных окружения Amvera `WEB_ADMIN_RESET_CODE` (длинный случайный код). После деплоя на экране входа администратора появится действие «Сбросить доступ администратора». Код используется только для подтверждения сброса; данные тубусов и клиентов не удаляются.
