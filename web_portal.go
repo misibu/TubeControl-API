@@ -16,11 +16,13 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/xuri/excelize/v2"
 	"golang.org/x/crypto/bcrypt"
 )
 
 const webSessionCookie = "tubecontrol_web_session"
+const webSessionTTL = 90 * 24 * time.Hour
 const webUserContextKey contextKey = "tubecontrol-web-user"
 
 type WebUser struct {
