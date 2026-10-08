@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +38,12 @@ type webLoginRequest struct {
 	Role     string `json:"role,omitempty"`
 }
 
+type webResetAdminRequest struct {
+	RecoveryCode string `json:"recovery_code"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+}
+
 type webCreateUserRequest struct {
 	Username        string `json:"username"`
 	DisplayName     string `json:"display_name"`
@@ -52,6 +60,7 @@ func registerWebRoutes(mux *http.ServeMux, a *App) {
 	mux.Handle("GET /api/web/bootstrap", a.requireDB(http.HandlerFunc(a.webBootstrap)))
 	mux.Handle("POST /api/web/setup", a.requireDB(http.HandlerFunc(a.webSetup)))
 	mux.Handle("POST /api/web/login", a.requireDB(http.HandlerFunc(a.webLogin)))
+	mux.Handle("POST /api/web/admin/reset", a.requireDB(http.HandlerFunc(a.webResetAdmin)))
 	mux.Handle("POST /api/web/logout", a.requireDB(http.HandlerFunc(a.webLogout)))
 
 	mux.Handle("GET /api/web/tubes", a.requireDB(a.requireWebAuth(http.HandlerFunc(a.webListTubes))))
@@ -177,6 +186,64 @@ RETURNING id
 	user := WebUser{ID: id, Username: req.Username, DisplayName: "Администратор", Role: "admin", Active: true}
 	if err := a.webStartSession(w, r, user.ID); err != nil {
 		writeError(w, 500, "session_error", "Администратор создан, но не удалось открыть сессию")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"status": "ok", "user": user})
+}
+
+func (a *App) webResetAdmin(w http.ResponseWriter, r *http.Request) {
+	var req webResetAdminRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		return
+	}
+	resetCode := strings.TrimSpace(os.Getenv("WEB_ADMIN_RESET_CODE"))
+	if resetCode == "" {
+		writeError(w, http.StatusServiceUnavailable, "reset_not_configured", "Сброс доступа не настроен в Amvera")
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(req.RecoveryCode), []byte(resetCode)) != 1 {
+		writeError(w, http.StatusUnauthorized, "invalid_recovery_code", "Неверный код восстановления")
+		return
+	}
+
+	req.Username = normalizeWebUsername(req.Username)
+	if err := validateWebCredentials(req.Username, req.Password); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_credentials", err.Error())
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		writeError(w, 500, "password_error", "Не удалось сохранить пароль")
+		return
+	}
+
+	var id int64
+	if err := a.db.QueryRow(r.Context(), `SELECT COALESCE(MIN(id),0) FROM web_users WHERE role='admin'`).Scan(&id); err != nil {
+		writeError(w, 500, "database_error", "Не удалось проверить администратора")
+		return
+	}
+	if id == 0 {
+		err = a.db.QueryRow(r.Context(), `
+INSERT INTO web_users(username,display_name,password_hash,role,active)
+VALUES($1,'Администратор',$2,'admin',TRUE)
+RETURNING id
+`, req.Username, string(hash)).Scan(&id)
+	} else {
+		_, err = a.db.Exec(r.Context(), `
+UPDATE web_users
+SET username=$2, display_name='Администратор', password_hash=$3, active=TRUE, updated_at=NOW()
+WHERE id=$1
+`, id, req.Username, string(hash))
+	}
+	if err != nil {
+		writeError(w, 500, "database_error", "Не удалось обновить данные администратора")
+		return
+	}
+
+	_, _ = a.db.Exec(r.Context(), `DELETE FROM web_sessions WHERE user_id=$1`, id)
+	user := WebUser{ID: id, Username: req.Username, DisplayName: "Администратор", Role: "admin", Active: true}
+	if err := a.webStartSession(w, r, id); err != nil {
+		writeError(w, 500, "session_error", "Пароль изменён, но не удалось открыть сессию")
 		return
 	}
 	writeJSON(w, 200, map[string]any{"status": "ok", "user": user})
@@ -817,6 +884,17 @@ const webPortalHTML = `<!doctype html>
       <div class="field"><label>Пароль</label><input id="password" type="password" class="input" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginUser()"></div>
       <label class="rememberrow"><input id="rememberMe" type="checkbox" onchange="rememberChanged()"> <span>Запомнить меня</span></label>
       <button class="btn primary" style="width:100%;margin-top:10px" onclick="loginUser()">ВОЙТИ</button>
+      <button id="resetAccessBtn" class="backrole hidden" style="margin-top:16px" onclick="showAdminReset()">Сбросить доступ администратора</button>
+    </div>
+    <div id="resetBox" class="authform hidden">
+      <div class="logo">Tube<span>Control</span></div><div class="tag">ВОССТАНОВЛЕНИЕ ДОСТУПА</div>
+      <button class="backrole" onclick="chooseRole('admin')">← Назад ко входу</button>
+      <h1>Новый логин и пароль</h1>
+      <p>Введите код восстановления из переменной WEB_ADMIN_RESET_CODE в Amvera. Данные отправлений не удаляются.</p>
+      <div class="field"><label>Код восстановления</label><input id="resetCode" type="password" class="input" autocomplete="off"></div>
+      <div class="field"><label>Новый логин</label><input id="resetLogin" class="input" autocomplete="username"></div>
+      <div class="field"><label>Новый пароль</label><input id="resetPassword" type="password" class="input" autocomplete="new-password" onkeydown="if(event.key==='Enter')resetAdminAccess()"></div>
+      <button class="btn primary" style="width:100%;margin-top:10px" onclick="resetAdminAccess()">СОХРАНИТЬ И ВОЙТИ</button>
     </div>
   </div>
 </section>
@@ -863,8 +941,9 @@ const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 async function api(url,opt){const r=await fetch(url,opt);let x={};const ct=r.headers.get('content-type')||'';if(ct.includes('application/json'))x=await r.json();if(!r.ok)throw new Error(x.message||x.error||('HTTP '+r.status));return x}
 function toast(t,err){const x=$('toast');x.textContent=t;x.className='toast'+(err?' err':'');setTimeout(()=>x.className='toast hidden',4200)}
-const rememberKey='tubecontrol_web_remember';function readRemembered(){try{const x=JSON.parse(localStorage.getItem(rememberKey)||'null');if(x&&(x.role==='admin'||x.role==='client'))return x}catch(e){}return null}function saveRemembered(){if(!$('rememberMe').checked){localStorage.removeItem(rememberKey);return}localStorage.setItem(rememberKey,JSON.stringify({role:selectedRole,username:$('login').value.trim()}))}function rememberChanged(){if(!$('rememberMe').checked)localStorage.removeItem(rememberKey)}function showRoleChoice(){selectedRole='';$('roleBox').classList.remove('hidden');$('setupBox').classList.add('hidden');$('loginBox').classList.add('hidden');$('password').value=''}function chooseRole(role){selectedRole=role;if(role==='client'&&needsSetup){toast('Сначала необходимо создать администратора',true);return}$('roleBox').classList.add('hidden');if(role==='admin'&&needsSetup){$('setupBox').classList.remove('hidden');$('loginBox').classList.add('hidden');setTimeout(()=>$('setupLogin').focus(),0);return}$('setupBox').classList.add('hidden');$('loginBox').classList.remove('hidden');$('loginRoleTag').textContent=role==='admin'?'АДМИНИСТРАТОР':'КЛИЕНТ';$('loginTitle').textContent=role==='admin'?'Вход администратора':'Вход клиента';$('loginText').textContent=role==='admin'?'Полный доступ к управлению TubeControl.':'Просмотр доступных отправлений, поиск и копирование данных.';setTimeout(()=>$('login').focus(),0)}async function boot(){try{const x=await api('/api/web/bootstrap');needsSetup=!!x.needs_setup;if(x.authenticated){enterApp(x.user);return}const saved=readRemembered();if(saved&&!needsSetup){$('rememberMe').checked=true;$('login').value=saved.username||'';chooseRole(saved.role);return}showRoleChoice()}catch(e){toast(e.message,true)}}
+const rememberKey='tubecontrol_web_remember';function readRemembered(){try{const x=JSON.parse(localStorage.getItem(rememberKey)||'null');if(x&&(x.role==='admin'||x.role==='client'))return x}catch(e){}return null}function saveRemembered(){if(!$('rememberMe').checked){localStorage.removeItem(rememberKey);return}localStorage.setItem(rememberKey,JSON.stringify({role:selectedRole,username:$('login').value.trim()}))}function rememberChanged(){if(!$('rememberMe').checked)localStorage.removeItem(rememberKey)}function showRoleChoice(){selectedRole='';$('roleBox').classList.remove('hidden');$('setupBox').classList.add('hidden');$('loginBox').classList.add('hidden');$('resetBox').classList.add('hidden');$('password').value=''}function chooseRole(role){selectedRole=role;if(role==='client'&&needsSetup){toast('Сначала необходимо создать администратора',true);return}$('roleBox').classList.add('hidden');$('resetBox').classList.add('hidden');if(role==='admin'&&needsSetup){$('setupBox').classList.remove('hidden');$('loginBox').classList.add('hidden');setTimeout(()=>$('setupLogin').focus(),0);return}$('setupBox').classList.add('hidden');$('loginBox').classList.remove('hidden');$('resetAccessBtn').classList.toggle('hidden',role!=='admin');$('loginRoleTag').textContent=role==='admin'?'АДМИНИСТРАТОР':'КЛИЕНТ';$('loginTitle').textContent=role==='admin'?'Вход администратора':'Вход клиента';$('loginText').textContent=role==='admin'?'Полный доступ к управлению TubeControl.':'Просмотр доступных отправлений, поиск и копирование данных.';setTimeout(()=>$('login').focus(),0)}function showAdminReset(){selectedRole='admin';$('roleBox').classList.add('hidden');$('setupBox').classList.add('hidden');$('loginBox').classList.add('hidden');$('resetBox').classList.remove('hidden');$('resetLogin').value=$('login').value.trim();setTimeout(()=>$('resetCode').focus(),0)}async function boot(){try{const x=await api('/api/web/bootstrap');needsSetup=!!x.needs_setup;if(x.authenticated){enterApp(x.user);return}const saved=readRemembered();if(saved&&!needsSetup){$('rememberMe').checked=true;$('login').value=saved.username||'';chooseRole(saved.role);return}showRoleChoice()}catch(e){toast(e.message,true)}}
 async function setupAdmin(){try{const x=await api('/api/web/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('setupLogin').value,password:$('setupPassword').value})});enterApp(x.user)}catch(e){toast(e.message,true)}}
+async function resetAdminAccess(){try{const x=await api('/api/web/admin/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recovery_code:$('resetCode').value,username:$('resetLogin').value,password:$('resetPassword').value})});$('login').value=$('resetLogin').value.trim();$('password').value='';$('resetCode').value='';$('resetPassword').value='';toast('Доступ администратора восстановлен');enterApp(x.user)}catch(e){toast(e.message,true)}}
 async function loginUser(){if(!selectedRole){showRoleChoice();return}try{const x=await api('/api/web/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('login').value,password:$('password').value,role:selectedRole})});saveRemembered();enterApp(x.user)}catch(e){toast(e.message,true)}}
 async function logoutUser(){try{await api('/api/web/logout',{method:'POST'})}finally{location.reload()}}
 function enterApp(u){me=u;$('auth').classList.add('hidden');$('app').classList.remove('hidden');$('displayName').textContent=u.display_name||u.username;$('role').textContent=u.role==='admin'?'АДМИНИСТРАТОР':'КЛИЕНТ';if(u.role==='admin')$('adminToolbar').classList.remove('hidden');loadTubes()}
