@@ -267,8 +267,24 @@ func (a *App) webLogin(w http.ResponseWriter, r *http.Request) {
 SELECT id,username,display_name,password_hash,role,store_code_filter,active
 FROM web_users WHERE username=$1
 `, req.Username).Scan(&user.ID, &user.Username, &user.DisplayName, &passwordHash, &user.Role, &user.StoreCodeFilter, &user.Active)
-	if err != nil || !user.Active || (req.Role != "" && user.Role != req.Role) || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
-		writeError(w, http.StatusUnauthorized, "invalid_login", "Неверный логин, пароль или выбранный тип входа")
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusUnauthorized, "unknown_user", "Пользователь с таким логином не найден")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "database_error", "Не удалось проверить данные входа")
+		return
+	}
+	if !user.Active {
+		writeError(w, http.StatusUnauthorized, "user_disabled", "Учётная запись отключена")
+		return
+	}
+	if req.Role != "" && user.Role != req.Role {
+		writeError(w, http.StatusUnauthorized, "wrong_role", "Для этого логина выбран неверный тип входа")
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
+		writeError(w, http.StatusUnauthorized, "wrong_password", "Неверный пароль")
 		return
 	}
 	if err := a.webStartSession(w, r, user.ID); err != nil {
