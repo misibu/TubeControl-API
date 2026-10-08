@@ -307,7 +307,7 @@ func (a *App) webStartSession(w http.ResponseWriter, r *http.Request, userID int
 	if err != nil {
 		return err
 	}
-	expires := time.Now().UTC().Add(7 * 24 * time.Hour)
+	expires := time.Now().UTC().Add(webSessionTTL)
 	_, err = a.db.Exec(r.Context(), `
 INSERT INTO web_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)
 `, hashSecret(token), userID, expires)
@@ -316,7 +316,7 @@ INSERT INTO web_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: webSessionCookie, Value: token, Path: "/",
-		Expires: expires, MaxAge: 7 * 24 * 60 * 60,
+		Expires: expires, MaxAge: int(webSessionTTL / time.Second),
 		HttpOnly: true, Secure: webCookieSecure(r), SameSite: http.SameSiteLaxMode,
 	})
 	return nil
@@ -943,7 +943,7 @@ async function api(url,opt){const r=await fetch(url,opt);let x={};const ct=r.hea
 function toast(t,err){const x=$('toast');x.textContent=t;x.className='toast'+(err?' err':'');setTimeout(()=>x.className='toast hidden',4200)}
 const rememberKey='tubecontrol_web_remember';function readRemembered(){try{const x=JSON.parse(localStorage.getItem(rememberKey)||'null');if(x&&(x.role==='admin'||x.role==='client'))return x}catch(e){}return null}function saveRemembered(){if(!$('rememberMe').checked){localStorage.removeItem(rememberKey);return}localStorage.setItem(rememberKey,JSON.stringify({role:selectedRole,username:$('login').value.trim()}))}function rememberChanged(){if(!$('rememberMe').checked)localStorage.removeItem(rememberKey)}function showRoleChoice(){selectedRole='';$('roleBox').classList.remove('hidden');$('setupBox').classList.add('hidden');$('loginBox').classList.add('hidden');$('resetBox').classList.add('hidden');$('password').value=''}function chooseRole(role){selectedRole=role;if(role==='client'&&needsSetup){toast('Сначала необходимо создать администратора',true);return}$('roleBox').classList.add('hidden');$('resetBox').classList.add('hidden');if(role==='admin'&&needsSetup){$('setupBox').classList.remove('hidden');$('loginBox').classList.add('hidden');setTimeout(()=>$('setupLogin').focus(),0);return}$('setupBox').classList.add('hidden');$('loginBox').classList.remove('hidden');$('resetAccessBtn').classList.toggle('hidden',role!=='admin');$('loginRoleTag').textContent=role==='admin'?'АДМИНИСТРАТОР':'КЛИЕНТ';$('loginTitle').textContent=role==='admin'?'Вход администратора':'Вход клиента';$('loginText').textContent=role==='admin'?'Полный доступ к управлению TubeControl.':'Просмотр доступных отправлений, поиск и копирование данных.';setTimeout(()=>$('login').focus(),0)}function showAdminReset(){selectedRole='admin';$('roleBox').classList.add('hidden');$('setupBox').classList.add('hidden');$('loginBox').classList.add('hidden');$('resetBox').classList.remove('hidden');$('resetLogin').value=$('login').value.trim();setTimeout(()=>$('resetCode').focus(),0)}async function boot(){try{const x=await api('/api/web/bootstrap');needsSetup=!!x.needs_setup;if(x.authenticated){enterApp(x.user);return}const saved=readRemembered();if(saved&&!needsSetup){$('rememberMe').checked=true;$('login').value=saved.username||'';chooseRole(saved.role);return}showRoleChoice()}catch(e){toast(e.message,true)}}
 async function setupAdmin(){try{const x=await api('/api/web/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('setupLogin').value,password:$('setupPassword').value})});enterApp(x.user)}catch(e){toast(e.message,true)}}
-async function resetAdminAccess(){try{const x=await api('/api/web/admin/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recovery_code:$('resetCode').value,username:$('resetLogin').value,password:$('resetPassword').value})});$('login').value=$('resetLogin').value.trim();$('password').value='';$('resetCode').value='';$('resetPassword').value='';toast('Доступ администратора восстановлен');enterApp(x.user)}catch(e){toast(e.message,true)}}
+async function resetAdminAccess(){try{const x=await api('/api/web/admin/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recovery_code:$('resetCode').value,username:$('resetLogin').value,password:$('resetPassword').value})});selectedRole='admin';$('login').value=$('resetLogin').value.trim();saveRemembered();$('password').value='';$('resetCode').value='';$('resetPassword').value='';toast('Доступ администратора восстановлен');enterApp(x.user)}catch(e){toast(e.message,true)}}
 async function loginUser(){if(!selectedRole){showRoleChoice();return}try{const x=await api('/api/web/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('login').value,password:$('password').value,role:selectedRole})});saveRemembered();enterApp(x.user)}catch(e){toast(e.message,true)}}
 async function logoutUser(){try{await api('/api/web/logout',{method:'POST'})}finally{location.reload()}}
 function enterApp(u){me=u;$('auth').classList.add('hidden');$('app').classList.remove('hidden');$('displayName').textContent=u.display_name||u.username;$('role').textContent=u.role==='admin'?'АДМИНИСТРАТОР':'КЛИЕНТ';if(u.role==='admin')$('adminToolbar').classList.remove('hidden');loadTubes()}
