@@ -25,6 +25,7 @@ type App struct {
 	desktopToken string
 	scannerToken string
 	ready        atomic.Bool
+	dbStatus     atomic.Value
 }
 
 type Tube struct {
@@ -65,6 +66,7 @@ func main() {
 		desktopToken: strings.TrimSpace(os.Getenv("DESKTOP_TOKEN")),
 		scannerToken: strings.TrimSpace(os.Getenv("SCANNER_TOKEN")),
 	}
+	app.dbStatus.Store("инициализация подключения")
 	if app.desktopToken == "" || app.scannerToken == "" {
 		log.Fatal("DESKTOP_TOKEN and SCANNER_TOKEN must be set")
 	}
@@ -122,16 +124,43 @@ func (a *App) initializeDatabase(ctx context.Context) {
 		cancel()
 		if err == nil {
 			a.ready.Store(true)
+			a.dbStatus.Store("ok")
 			log.Printf("PostgreSQL connected; schema ready")
 			return
 		}
 		a.ready.Store(false)
+		a.dbStatus.Store(classifyDatabaseError(err))
 		log.Printf("PostgreSQL not ready: %v; retrying in 5s", err)
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(5 * time.Second):
 		}
+	}
+}
+
+func classifyDatabaseError(err error) string {
+	if err == nil {
+		return "ok"
+	}
+	s := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(s, "password authentication failed") || strings.Contains(s, "28p01"):
+		return "PostgreSQL отклонил логин или пароль"
+	case strings.Contains(s, "no such host") || strings.Contains(s, "name resolution"):
+		return "не удаётся найти адрес PostgreSQL"
+	case strings.Contains(s, "connection refused"):
+		return "PostgreSQL отклоняет подключение"
+	case strings.Contains(s, "timeout") || strings.Contains(s, "deadline exceeded"):
+		return "истекло время подключения к PostgreSQL"
+	case strings.Contains(s, "does not exist"):
+		return "указанная база данных не найдена"
+	case strings.Contains(s, "permission denied") || strings.Contains(s, "42501"):
+		return "недостаточно прав PostgreSQL"
+	case strings.Contains(s, "ssl"):
+		return "ошибка SSL при подключении к PostgreSQL"
+	default:
+		return "ошибка подключения или подготовки PostgreSQL"
 	}
 }
 
@@ -194,7 +223,8 @@ func (a *App) readiness(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	if err := a.db.Ping(ctx); err != nil || !a.ready.Load() {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "not_ready", "database": "unavailable"})
+		detail, _ := a.dbStatus.Load().(string)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "not_ready", "database": "unavailable", "detail": detail})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ready", "database": "ok"})
@@ -203,7 +233,12 @@ func (a *App) readiness(w http.ResponseWriter, r *http.Request) {
 func (a *App) requireDB(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.ready.Load() {
-			writeError(w, http.StatusServiceUnavailable, "database_not_ready", "Database is not ready")
+			detail, _ := a.dbStatus.Load().(string)
+			msg := "База данных пока недоступна"
+			if strings.TrimSpace(detail) != "" {
+				msg += ": " + detail
+			}
+			writeError(w, http.StatusServiceUnavailable, "database_not_ready", msg)
 			return
 		}
 		next.ServeHTTP(w, r)
