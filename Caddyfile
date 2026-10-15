@@ -2,3 +2,7 @@ tubecontrol.ru {
     encode zstd gzip
     reverse_proxy tubecontrol:8080
 }
+
+www.tubecontrol.ru {
+    redir https://tubecontrol.ru{uri} permanent
+}
