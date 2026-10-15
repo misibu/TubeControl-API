@@ -1,0 +1,102 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: tubecontrol-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-tubecontrol}
+      POSTGRES_USER: ${DB_USER:-tubeapp}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tubeapp} -d ${DB_NAME:-tubecontrol}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - tubecontrol
+
+  tubecontrol:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tubecontrol-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-tubecontrol}
+      DB_USER: ${DB_USER:-tubeapp}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSLMODE: disable
+      DESKTOP_TOKEN: ${DESKTOP_TOKEN}
+      SCANNER_TOKEN: ${SCANNER_TOKEN}
+      WEB_ADMIN_RESET_CODE: ${WEB_ADMIN_RESET_CODE}
+      PORT: "8080"
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ready | grep -q '\"status\":\"ready\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    networks:
+      - tubecontrol
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: tubecontrol-caddy
+    restart: unless-stopped
+    depends_on:
+      tubecontrol:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - tubecontrol
+
+  backup:
+    image: postgres:17-alpine
+    container_name: tubecontrol-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: ${DB_NAME:-tubecontrol}
+      POSTGRES_USER: ${DB_USER:-tubeapp}
+      PGPASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    command:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /backups
+        while true; do
+          ts=$$(date -u +%Y%m%dT%H%M%SZ)
+          pg_dump -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc -f "/backups/tubecontrol_$$ts.dump" && \
+            find /backups -type f -name '*.dump' -mtime +14 -delete
+          sleep 86400
+        done
+    networks:
+      - tubecontrol
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  tubecontrol:
+    driver: bridge
