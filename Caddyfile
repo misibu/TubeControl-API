@@ -1,4 +1,4 @@
-:80 {
+tubecontrol.ru {
     encode zstd gzip
     reverse_proxy tubecontrol:8080
 }
