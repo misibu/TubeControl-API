@@ -34,7 +34,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String DEFAULT_BASE_URL = "https://tubecontrol-api-msk-misibun.amvera.io";
+    private static final String DEFAULT_BASE_URL = "https://tubecontrol.ru";
     private static final String PREF_TOKEN = "device_token_v2";
     private static final String PREF_SERVER = "server_url_v2";
     private static final String PREF_DEVICE_ID = "device_id_v2";
@@ -141,7 +141,7 @@ public class MainActivity extends AppCompatActivity {
     private void showFirstSetupDialog() {
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Подключение TubeControl")
-                .setMessage("На компьютере нажмите «Подключить телефон», затем отсканируйте показанный QR. Токен вводить не нужно.")
+                .setMessage("В веб-кабинете TubeControl нажмите «Подключить Android», затем отсканируйте показанный QR. Токен вводить не нужно.")
                 .setPositiveButton("Сканировать QR", (d, which) -> startSetupScanner())
                 .create();
         dialog.setCancelable(false);
@@ -168,7 +168,7 @@ public class MainActivity extends AppCompatActivity {
     private void startSetupScanner() {
         ScanOptions options = new ScanOptions();
         options.setDesiredBarcodeFormats(Collections.singletonList(BarcodeFormat.QR_CODE.toString()));
-        options.setPrompt("Наведите камеру на QR подключения TubeControl");
+        options.setPrompt("Наведите камеру на QR из веб-кабинета TubeControl");
         options.setBeepEnabled(true);
         options.setOrientationLocked(true);
         options.setCaptureActivity(PortraitCaptureActivity.class);
@@ -196,7 +196,7 @@ public class MainActivity extends AppCompatActivity {
             }
             enrollDevice(server, code);
         } catch (Exception e) {
-            showError("Неверный QR подключения\nИспользуйте QR из TubeControl Windows");
+            showError("Неверный QR подключения\nИспользуйте QR из веб-кабинета TubeControl");
             if (!isConfigured()) showFirstSetupDialog();
         }
     }
